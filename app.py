@@ -15,6 +15,7 @@ app = Flask(__name__)
 
 TMDB_KEY = os.getenv("TMDB_API_KEY")
 DB_NAME = "bacon.db"
+CACHE_RATINGS = {} # tconst -> (rating, votos)
 
 # ==========================================
 # 1. GESTIÓN DE BASE DE DATOS
@@ -36,30 +37,59 @@ def obtener_datos_peli(cursor, peli_id):
     cursor.execute("SELECT rating, votos FROM peliculas WHERE id = ?", (peli_id,))
     return cursor.fetchone()
 
-def calcular_peso_casual(u, v, cursor):
-    if v.startswith('nm'): return 0.1
-    
-    row = obtener_datos_peli(cursor, v)
-    if row:
-        rating = row['rating']
-        return max(0.1, 10.1 - rating)
-    return 5.0
-
-def calcular_peso_critico(u, v, cursor):
-    if v.startswith('nm'): return 0.1
-    
-    row = obtener_datos_peli(cursor, v)
-    if row:
-        rating = row['rating']
-        votos = row['votos']
+def cargar_cache_ratings():
+    print("🚀 Pre-cargando ratings en RAM para velocidad...")
+    try:
+        conn = sqlite3.connect(DB_NAME)
+        cursor = conn.cursor()
+        # Traemos solo lo necesario para la matemática de pesos
+        cursor.execute("SELECT id, rating, votos FROM peliculas")
         
-        # Base 2.5 (Calidad) y Log^2 (Fama)
+        for row in cursor:
+            # row[0]=id, row[1]=rating, row[2]=votos
+            CACHE_RATINGS[row[0]] = (row[1], row[2])
+            
+        conn.close()
+        print(f"✅ Caché lista: {len(CACHE_RATINGS)} películas.")
+    except Exception as e:
+        print(f"⚠️ Error cargando caché (quizás no existe la DB aún): {e}")
+
+# Ejecutamos esto INMEDIATAMENTE al iniciar
+if os.path.exists(DB_NAME):
+    cargar_cache_ratings()
+
+def calcular_peso_casual(u, v, _):
+    # Si es actor, costo mínimo
+    if v.startswith('nm'): return 0.1
+    
+    # Búsqueda INSTANTÁNEA en RAM
+    datos = CACHE_RATINGS.get(v)
+    
+    if datos:
+        rating = datos[0]
+        # Si rating es None (pasa a veces), asumimos 5.0
+        if rating is None: return 5.0
+        return max(0.1, 10.1 - rating)
+    
+    return 5.0 # Peli desconocida
+
+def calcular_peso_critico(u, v, _):
+    if v.startswith('nm'): return 0.1
+    
+    datos = CACHE_RATINGS.get(v)
+    
+    if datos:
+        rating, votos = datos
+        
+        if rating is None or votos is None: return 10.0
+        
+        # Tu fórmula maestra:
         factor_calidad = 2.5 ** (10.0 - rating)
         factor_fama = (math.log10(votos + 1)) ** 2
+        
         return factor_calidad * factor_fama
         
     return 50.0
-
 # ==========================================
 # 3. RUTAS WEB
 # ==========================================
@@ -180,8 +210,10 @@ def buscar():
     if modo == 'Velocidad':
         camino_ids = bfs_bidireccional(cursor, origen, destino, ids_validos=ids_validos)
     elif modo == 'Casual':
+        # Pasamos None en vez de cursor
         camino_ids = dijkstra(cursor, origen, destino, calcular_peso_casual, ids_validos=ids_validos)
     elif modo in ['Critico', 'Crítico']:
+        # Pasamos None en vez de cursor
         camino_ids = dijkstra(cursor, origen, destino, calcular_peso_critico, ids_validos=ids_validos)
     else:
         camino_ids = None
