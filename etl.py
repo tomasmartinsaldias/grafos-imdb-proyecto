@@ -1,244 +1,182 @@
+import sqlite3
 import pandas as pd
 import csv
 import time
-import pickle
+import os
 import re
 import unicodedata
 
-# --- CONFIGURACIÓN DE ARCHIVOS ---
-# Asegúrate de que estos archivos RAW de IMDb estén en la carpeta
+# --- CONFIGURACIÓN ---
+DB_NAME = "bacon.db"
 RAW_BASICS = "title.basics.tsv"
 RAW_PRINCIPALS = "title.principals.tsv"
 RAW_RATINGS = "title.ratings.tsv"
 RAW_NAMES = "name.basics.tsv"
 
-# Archivos de SALIDA (Los que usará la App)
-OUTPUT_GRAFO = "grafo_bacon.pkl"
-OUTPUT_METADATA = "metadata_bacon.pkl"
+# 🔥 EL FILTRO MÁGICO: Solo películas con más de X votos
+# 500 es un buen balance. Si sigue pesando >100MB, subelo a 1000.
+MIN_VOTOS = 450 
 
 def normalizar_texto(texto):
-    """
-    Transforma 'Stellan Skarsgård' -> 'stellan skarsgard'
-    Transforma 'Samuel L. Jackson' -> 'samuel l jackson'
-    """
     if not texto: return ""
-    # 1. Minúsculas
     texto = texto.lower()
-    # 2. Quitar acentos (Descomposición Unicode: 'á' -> 'a' + '´')
-    # El encode('ascii', 'ignore') tira la tilde a la basura y deja la letra
     texto = unicodedata.normalize('NFKD', texto).encode('ascii', 'ignore').decode('utf-8')
-    # 3. Quitar todo lo que NO sea letra o número (puntos, comas, guiones)
     texto = re.sub(r'[^a-z0-9\s]', '', texto)
     return texto.strip()
 
-def obtener_peliculas_validas():
-    """
-    Paso 1: Escanear title.basics para obtener un SET de IDs que sean 
-    realmente 'movie'. Esto sirve para filtrar basura del grafo.
-    """
-    print(f"🕵️  Analizando {RAW_BASICS} para identificar películas...")
-    validas = set()
-    try:
-        # Leemos solo las columnas necesarias para ahorrar memoria
-        # tconst (ID), titleType (tipo)
-        chunks = pd.read_csv(RAW_BASICS, sep='\t', usecols=['tconst', 'titleType'], 
-                             chunksize=100000, low_memory=False)
-        
-        for chunk in chunks:
-            # Usamos .isin() para filtrar por una lista de opciones
-            filtro = chunk['titleType'].isin(['movie', 'tvMovie'])
-            movies = chunk[filtro]
-            
-            validas.update(movies['tconst'])
-            
-        print(f"   ✅ Se identificaron {len(validas):,} películas válidas.")
-        return validas
-    except FileNotFoundError:
-        print(f"   ❌ Error: No encuentro {RAW_BASICS}")
-        return set()
+def iniciar_db():
+    if os.path.exists(DB_NAME): os.remove(DB_NAME)
+    conn = sqlite3.connect(DB_NAME)
+    c = conn.cursor()
+    c.execute('CREATE TABLE peliculas (id TEXT PRIMARY KEY, titulo TEXT, anio INTEGER, generos TEXT, rating REAL, votos INTEGER)')
+    c.execute('CREATE TABLE actores (id TEXT PRIMARY KEY, nombre TEXT, anio_nac TEXT)')
+    c.execute('CREATE TABLE aristas (origen TEXT, destino TEXT)')
+    c.execute('CREATE TABLE nombres (nombre_limpio TEXT, id_actor TEXT)')
+    conn.commit()
+    return conn
 
-def construir_grafo_desde_raw(peliculas_validas):
-    """
-    Paso 2: Procesar el gigante title.principals.tsv.
-    Usamos chunking para leerlo de a poco.
-    Solo guardamos conexiones si:
-      - Es actor/actress
-      - La película está en el set 'peliculas_validas'
-    """
-    print(f"🕸️  Construyendo Grafo desde {RAW_PRINCIPALS} (Esto tardará)...")
-    inicio = time.time()
-    grafo = {}
+def ejecutar_etl_sql():
+    print(f"🚀 INICIANDO ETL SQL (MODO VIP > {MIN_VOTOS} VOTOS) -> {DB_NAME}")
+    inicio_global = time.time()
+    conn = iniciar_db()
+    c = conn.cursor()
     
-    conexiones_count = 0
+    # --- PASO 1: CARGAR RATINGS Y FILTRAR POR POPULARIDAD ---
+    print("1️⃣  Cargando Ratings y aplicando filtro de popularidad...")
+    # Guardamos en RAM solo las películas que superan el umbral
+    peliculas_populares = set()
+    ratings_map = {}
     
-    try:
-        # Columnas: tconst (peli), nconst (actor), category (trabajo)
-        chunks = pd.read_csv(RAW_PRINCIPALS, sep='\t', 
-                             usecols=['tconst', 'nconst', 'category'], 
-                             chunksize=1000000, low_memory=False)
-        
-        for i, chunk in enumerate(chunks):
-            # 1. Filtro de Categoría (Solo Actores)
-            # "category" suele ser la columna que dice 'actor', 'actress', 'director'...
-            chunk_filtrado = chunk[chunk['category'].isin(['actor', 'actress'])]
-            
-            # 2. Filtro de Película Válida (Usando el set del paso 1)
-            chunk_filtrado = chunk_filtrado[chunk_filtrado['tconst'].isin(peliculas_validas)]
-            
-            if chunk_filtrado.empty: continue
-            
-            # 3. Llenado del Grafo (Iteramos sobre el dataframe filtrado)
-            # zip es mucho más rápido que iterrows
-            for peli, actor in zip(chunk_filtrado['tconst'], chunk_filtrado['nconst']):
-                
-                # Relación Peli -> Actor
-                if peli not in grafo: grafo[peli] = []
-                grafo[peli].append(actor)
-                
-                # Relación Actor -> Peli
-                if actor not in grafo: grafo[actor] = []
-                grafo[actor].append(peli)
-                
-                conexiones_count += 1
-            
-            if i % 5 == 0:
-                print(f"... Procesados {(i+1)} millones de filas raw...")
-
-        print(f"   ✅ Grafo terminado: {len(grafo):,} nodos conectados.")
-        print(f"   ⏱️ Tiempo de grafo: {time.time() - inicio:.2f}s")
-        return grafo
-
-    except FileNotFoundError:
-        print(f"   ❌ Error: No encuentro {RAW_PRINCIPALS}")
-        return {}
-
-def construir_metadatos(grafo_completo):
-    """
-    Paso 3: Generar diccionarios de info (Títulos, Nombres, Ratings).
-    Solo guardamos info de películas que realmente quedaron en el grafo.
-    """
-    print("📚 Generando Metadatos...")
-    inicio = time.time()
-    
-    mapa_peliculas = {}
-    mapa_actores = {}
-    mapa_nombres = {} 
-    lista_generos = set()
-    candidatos = [] 
-    
-    # --- A. RATINGS ---
-    print("   1/3 Cargando Ratings...")
-    ratings = {}
-    try:
-        # Pandas es overkill aqui, usamos csv normal que es rápido
-        with open(RAW_RATINGS, 'r', encoding='utf-8') as f:
-            reader = csv.reader(f, delimiter='\t')
-            next(reader)
-            for row in reader:
-                try:
-                    # tconst -> (avgRating, numVotes)
-                    ratings[row[0]] = (float(row[1]), int(row[2]))
-                except: continue
-    except FileNotFoundError:
-        print("   ⚠️ Falta archivo de ratings.")
-
-    # --- B. DETALLES PELÍCULAS ---
-    print("   2/3 Detalles de Películas...")
-    try:
-        with open(RAW_BASICS, 'r', encoding='utf-8') as f:
-            reader = csv.reader(f, delimiter='\t')
-            next(reader)
-            for row in reader:
+    with open(RAW_RATINGS, 'r', encoding='utf-8') as f:
+        reader = csv.reader(f, delimiter='\t')
+        next(reader)
+        for row in reader:
+            try:
                 tconst = row[0]
-                # Solo procesamos si la peli está en el grafo (ahorra RAM)
-                if tconst in grafo_completo:
-                    titulo = row[2]
-                    anio = int(row[5]) if row[5].isdigit() else 0
-                    generos = row[8].split(',')
-                    duracion = int(row[7]) if row[7].isdigit() else 0
-                    rat, vot = ratings.get(tconst, (0.0, 0))
-                    
-                    mapa_peliculas[tconst] = (titulo, anio, generos, duracion, rat, vot)
-                    for g in generos: 
-                        if g != '\\N': lista_generos.add(g)
-    except FileNotFoundError:
-        print("   ❌ Falta title.basics.")
+                votos = int(row[2])
+                if votos >= MIN_VOTOS:
+                    rating = float(row[1])
+                    peliculas_populares.add(tconst)
+                    ratings_map[tconst] = (rating, votos)
+            except: continue
+    print(f"   -> {len(peliculas_populares):,} películas superaron los {MIN_VOTOS} votos.")
 
-    # --- C. NOMBRES ACTORES ---
-    print("   3/3 Nombres de Actores...")
-    try:
-        with open(RAW_NAMES, 'r', encoding='utf-8') as f:
-            reader = csv.reader(f, delimiter='\t')
-            next(reader)
-            for row in reader:
-                nconst = row[0]
-                if nconst in grafo_completo:
-                    nombre_original = row[1]
-                    birth_year = row[2] if len(row) > 2 and row[2].isdigit() else "????"
-                    
-                    # Guardamos el nombre ORIGINAL para mostrar en pantalla
-                    mapa_actores[nconst] = (nombre_original, birth_year)
-                    
-                    # CAMBIO CLAVE: Usamos el nombre NORMALIZADO como clave de búsqueda
-                    nombre_limpio = normalizar_texto(nombre_original)
-                    
-                    if nombre_limpio not in mapa_nombres:
-                        mapa_nombres[nombre_limpio] = []
-                    mapa_nombres[nombre_limpio].append(nconst)
+    # --- PASO 2: IDENTIFICAR PELÍCULAS VÁLIDAS (CINE/TV + POPULARES) ---
+    print("2️⃣  Cruzando con title.basics (Tipo Movie/TVMovie)...")
+    validas_finales = set()
+    
+    chunks = pd.read_csv(RAW_BASICS, sep='\t', usecols=['tconst', 'titleType'], 
+                         chunksize=100000, low_memory=False)
+    for chunk in chunks:
+        # Filtro 1: Tipo correcto
+        filtro_tipo = chunk['titleType'].isin(['movie', 'tvMovie'])
+        # Filtro 2: Es popular
+        filtro_pop = chunk['tconst'].isin(peliculas_populares)
+        
+        validas = chunk[filtro_tipo & filtro_pop]
+        validas_finales.update(validas['tconst'])
+        
+    # Liberamos memoria
+    del peliculas_populares
+    print(f"   ✅ Universo Final: {len(validas_finales):,} películas válidas.")
+    
+    # --- PASO 3: PROCESAR GRAFO (ARISTAS) ---
+    print("3️⃣  Procesando Conexiones (Solo universo válido)...")
+    nodos_activos = set()
+    batch_aristas = []
+    
+    chunks = pd.read_csv(RAW_PRINCIPALS, sep='\t', 
+                         usecols=['tconst', 'nconst', 'category'], 
+                         chunksize=500000, low_memory=False)
+    
+    for i, chunk in enumerate(chunks):
+        df = chunk[chunk['category'].isin(['actor', 'actress'])]
+        df = df[df['tconst'].isin(validas_finales)] # Solo pelis VIP
+        
+        if df.empty: continue
+        
+        for peli, actor in zip(df['tconst'], df['nconst']):
+            batch_aristas.append((peli, actor))
+            batch_aristas.append((actor, peli))
+            nodos_activos.add(peli)
+            nodos_activos.add(actor)
+        
+        if len(batch_aristas) >= 50000:
+            c.executemany('INSERT INTO aristas VALUES (?,?)', batch_aristas)
+            batch_aristas = []
+            
+    if batch_aristas: c.executemany('INSERT INTO aristas VALUES (?,?)', batch_aristas)
+    conn.commit()
+    
+    # --- INICIO DEBUG AGREGADO ---
+    print("\n📊 --- REPORTE DE DIAGNÓSTICO PRE-SQL ---")
+    print(f"   Nodos Totales (con conexiones): {len(nodos_activos):,}")
+    
+    # Contamos cuántos son películas (empiezan con 'tt') y cuántos actores ('nm')
+    solo_pelis = [n for n in nodos_activos if n.startswith('tt')]
+    solo_actores = len(nodos_activos) - len(solo_pelis)
+    
+    print(f"   🎬 Películas sobrevivientes: {len(solo_pelis):,}")
+    print(f"   🎭 Actores sobrevivientes:   {solo_actores:,}")
+    print("-------------------------------------------\n")
+    # --- FIN DEBUG AGREGADO ---
+
+    # --- PASO 4: INSERTAR METADATOS PELÍCULAS ---
+    print("4️⃣  Guardando Metadatos de Películas...")
+    batch_peliculas = []
+    with open(RAW_BASICS, 'r', encoding='utf-8') as f:
+        reader = csv.reader(f, delimiter='\t')
+        next(reader)
+        for row in reader:
+            tconst = row[0]
+            if tconst in nodos_activos: # Solo si tiene conexiones
+                titulo = row[2]
+                anio = int(row[5]) if row[5].isdigit() else 0
+                generos = row[8]
+                rat, vot = ratings_map.get(tconst, (0.0, 0))
                 
-                    # Candidatos para 'Voy a tener suerte' (Famosos)
-                    # 1. Obtenemos cuántas películas hizo este actor (Grado del nodo)
-                    conexiones = len(grafo_completo[nconst])
-                    
-                    #    - Debe tener ID bajo ("nm000..." -> indica antigüedad/relevancia histórica)
-                    #    - Y ADEMÁS debe tener al menos 5 películas conectadas en nuestro grafo.
-                    if len(candidatos) < 5000 and conexiones >= 5:
-                        candidatos.append({'id': nconst, 'name': nombre})
-    except FileNotFoundError:
-        print("   ❌ Falta name.basics.")
+                batch_peliculas.append((tconst, titulo, anio, generos, rat, vot))
+                if len(batch_peliculas) >= 10000:
+                    c.executemany('INSERT INTO peliculas VALUES (?,?,?,?,?,?)', batch_peliculas)
+                    batch_peliculas = []
+    if batch_peliculas: c.executemany('INSERT INTO peliculas VALUES (?,?,?,?,?,?)', batch_peliculas)
+    conn.commit()
 
-    print(f"   ✅ Metadatos listos ({time.time() - inicio:.2f}s).")
+    # --- PASO 5: INSERTAR ACTORES ---
+    print("5️⃣  Guardando Actores...")
+    batch_actores = []
+    batch_nombres = []
+    with open(RAW_NAMES, 'r', encoding='utf-8') as f:
+        reader = csv.reader(f, delimiter='\t')
+        next(reader)
+        for row in reader:
+            nconst = row[0]
+            if nconst in nodos_activos: # Solo si tiene conexiones
+                nombre = row[1]
+                anio_nac = row[2] if len(row) > 2 and row[2].isdigit() else "????"
+                
+                batch_actores.append((nconst, nombre, anio_nac))
+                batch_nombres.append((normalizar_texto(nombre), nconst))
+                
+                if len(batch_actores) >= 10000:
+                    c.executemany('INSERT INTO actores VALUES (?,?,?)', batch_actores)
+                    c.executemany('INSERT INTO nombres VALUES (?,?)', batch_nombres)
+                    batch_actores = []
+                    batch_nombres = []
+    if batch_actores:
+        c.executemany('INSERT INTO actores VALUES (?,?,?)', batch_actores)
+        c.executemany('INSERT INTO nombres VALUES (?,?)', batch_nombres)
+    conn.commit()
+
+    # --- FINALIZAR ---
+    print("⚡ Indexando y Compactando...")
+    c.execute('CREATE INDEX idx_aristas_origen ON aristas(origen)')
+    c.execute('CREATE INDEX idx_nombres_limpio ON nombres(nombre_limpio)')
+    c.execute('VACUUM') 
+    conn.close()
     
-    return {
-        'peliculas': mapa_peliculas,
-        'actores': mapa_actores,
-        'nombres': mapa_nombres,
-        'generos': sorted(list(lista_generos)),
-        'candidatos': candidatos
-    }
-
-def ejecutar_etl_puro():
-    print("🚀 INICIANDO ETL PURO (RAW -> PICKLE) ...")
-    
-    # 1. Identificar qué es una película válida
-    peliculas_validas = obtener_peliculas_validas()
-    
-    if not peliculas_validas:
-        print("❌ Abortando: No se pudieron identificar películas.")
-        return
-
-    # 2. Construir Grafo desde Cero (Principals)
-    grafo = construir_grafo_desde_raw(peliculas_validas)
-    
-    if not grafo:
-        print("❌ Abortando: Grafo vacío.")
-        return
-
-    # Guardar Grafo
-    print(f"💾 Guardando {OUTPUT_GRAFO}...")
-    with open(OUTPUT_GRAFO, 'wb') as f:
-        pickle.dump(grafo, f, protocol=pickle.HIGHEST_PROTOCOL)
-
-    # 3. Construir Metadatos (Usando las keys del grafo para filtrar)
-    # Pasamos las keys del grafo para no cargar info de actores/pelis que no tienen conexiones
-    meta = construir_metadatos(grafo)
-    
-    # Guardar Metadatos
-    print(f"💾 Guardando {OUTPUT_METADATA}...")
-    with open(OUTPUT_METADATA, 'wb') as f:
-        pickle.dump(meta, f, protocol=pickle.HIGHEST_PROTOCOL)
-
-    print("\n✨ ETL FINALIZADO CORRECTAMENTE ✨")
+    size_mb = os.path.getsize(DB_NAME) / (1024*1024)
+    print(f"📦 TAMAÑO FINAL: {size_mb:.2f} MB")
 
 if __name__ == "__main__":
-    ejecutar_etl_puro()
+    ejecutar_etl_sql()

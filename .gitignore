@@ -1,13 +1,15 @@
-# --- Secretos (NUNCA SUBIR) ---
+# --- Secretos ---
 .env
 
-# --- Archivos Gigantes de Datos ---
+# --- Datos RAW (Estos NO se suben) ---
 *.tsv
 *.csv
 *.pkl
 
-# --- Basura de Python ---
+# --- Base de Datos (ESTA SÍ SE SUBE EN DEPLOY) ---
+# Comentamos la línea para permitir subirla, o ponemos !
+!bacon.db
+
+# --- Python basura ---
 __pycache__/
-*.pyc
 venv/
-.DS_Store
