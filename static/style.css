@@ -17,14 +17,15 @@ body {
     font-family: 'Cormorant Garamond', serif;
     background-color: var(--bg-main);
     color: var(--text-primary);
-    height: 100vh;
-    overflow: hidden; /* Evita scroll en el body entero */
+    height: 100vh; 
+    overflow: hidden; 
 }
 
 .main-container { 
     display: flex; 
     height: 100%; 
     width: 100%; /* Asegura ancho total */
+    align-items: stretch;
 }
 
 /* --- SIDEBAR --- */
@@ -39,6 +40,7 @@ body {
     overflow-y: auto;
     flex-shrink: 0;
     z-index: 10; /* Sidebar por encima */
+    height: 100%
 }
 
 .sidebar h2 {
@@ -143,7 +145,7 @@ input:focus { border-color: var(--red-oscar); }
     flex: 1;
     display: flex;
     flex-direction: column;
-    height: 100vh; 
+    height: auto; 
     
     /* CAMBIO CLAVE: */
     overflow-y: auto; /* Si la pantalla es chica, aparece scroll vertical */
@@ -349,6 +351,10 @@ a.card-link:hover .card {
     cursor: help;
 }
 
+#toggle-icon {
+    display: none; /* Oculto en PC por defecto */
+}
+
 /* El contenedor que flota sobre todo */
  #global-tooltip {
 
@@ -414,7 +420,7 @@ a.card-link:hover .card {
     max-width: 800px;
     
     /* Fuente y espaciado más compactos */
-    font-size: 1.0rem; /* Reducido de 1.15rem */
+    font-size: 1.15rem; /* Reducido de 1.15rem */
     line-height: 1.4; /* Línea más ajustada */
     
     margin: -10px auto 15px auto; /* Reducimos el margen inferior */
@@ -499,31 +505,129 @@ a.card-link:hover .card {
 }
 
 @media (max-width: 768px) {
-    /* Permitir scroll en toda la página */
-    .content {
-        overflow-y: auto !important;
-        height: auto !important;
-    }
-
-    /* Que el sidebar deje de ser lateral y vaya arriba */
-    .main-container {
-        flex-direction: column;
-    }
-
-    .sidebar {
-        width: 100%;
-        border-right: none;
-        border-bottom: 2px solid var(--gold-medium);
-        max-height: 300px; /* Sidebar colapsado o con scroll propio */
-    }
-
-    /* Ajustar alturas para que no se rompa */
-    #results-wrapper {
-        min-height: 400px; 
+    /* --- CORRECCIÓN FINAL DE FLUJO Y DESBORDAMIENTO HORIZONTAL --- */
+    
+    html, body {
+        height: auto !important; /* Permite que la altura sea dictada por el contenido (la pila) */
+        overflow-y: auto !important; /* Habilita el scroll vertical del navegador */
+        overflow-x: hidden !important; /* Mantiene la eliminación del scroll horizontal */
+        width: 100% !important;
     }
     
-    /* Ajustar textos grandes */
-    .main-title { font-size: 2rem; }
+    .intro-text{
+        font-size: 1.05rem;
+    }
+
+    /* 1. LAYOUT PRINCIPAL Y FLUIDEZ */
+    .main-container {
+        flex-direction: column !important; 
+        height: auto !important; /* Esto era correcto */
+    }
+    
+    /* 2. SIDEBAR */
+    .sidebar {
+        width: 100% !important;
+        height: auto !important;
+        min-height: auto !important; 
+        border-right: none !important;
+        border-bottom: 3px solid var(--gold-medium);
+        /* Ajustar padding para evitar desbordamiento */
+        padding: 15px !important; 
+        box-sizing: border-box !important;
+    }
+    
+    /* 3. CONTENIDO PRINCIPAL */
+    .content {
+        width: 100% !important;
+        /* Reducimos el padding lateral para que el contenido encaje */
+        padding: 15px 10px !important; 
+        height: auto !important;
+        overflow: visible !important;
+        box-sizing: border-box !important;
+    }
+
+    /* 4. ARREGLO DE TÍTULOS Y TEXTO CORTADO */
+    .main-title {
+        font-size: 1.5rem !important; /* Achicar el título para que quepa */
+        white-space: normal !important; /* Permitir salto de línea */
+        padding: 0 5px; /* Pequeño padding extra para que no toque los bordes */
+    }
+    
+    /* LÓGICA DEL ACORDEÓN (Filtros) */
+    .filters-body {
+        display: none; 
+        padding-top: 10px;
+    }
+    .filters-body.is-open {
+        display: block !important;
+    }
+
+    .sidebar-header {
+        cursor: pointer;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 10px 0;
+    }
+    
+    #toggle-icon {
+        display: inline-block !important; 
+        transition: transform 0.3s;
+    }
+    
+    .sidebar-header.active #toggle-icon {
+        transform: rotate(180deg);
+    }
+    
+    /* ARREGLO DE UX MÓVIL (Inputs apilados) */
+    .search-area {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+    
+    .input-group, .button-group {
+        width: 100% !important;
+    }
+    .button-group {
+        justify-content: center;
+        margin-top: 10px;
+    }
+    #degree-display {
+        /* Mantenemos el flex-direction column y centrado */
+        display: flex !important;    
+        flex-direction: column !important;
+        align-items: center !important;
+        justify-content: center !important; /* Centra el contenido verticalmente */
+        
+        /* Asegura suficiente espacio vertical para todo el contenido */
+        padding: 15px 10px !important; 
+        height: auto !important; /* Permitir que la altura se ajuste al contenido */
+        min-height: 80px !important; /* Asegura una altura mínima si el contenido es poco */
+        
+        gap: 5px; /* Espacio entre los elementos apilados */
+        box-sizing: border-box !important; /* Crucial para que el padding no añada ancho */
+        width: 100% !important; /* Asegurar que ocupe todo el ancho */
+    }
+
+    /* Estilo para el texto descriptivo que acabamos de envolver */
+    .degree-label {
+        font-size: 1.1rem !important; /* Ajusta el tamaño si es necesario */
+        text-align: center !important;
+        color: var(--text-color-light); /* O el color que uses para textos secundarios */
+    }
+
+    /* Asegurar que el número de grados también quepa */
+    #degree-count {
+        font-size: 2.5rem !important; /* Asegurar un tamaño que quepa */
+        line-height: 1 !important; /* Evita espacio extra si el numero se ve cortado */
+        height: auto !important;
+    }
+    
+    /* Asegurar que las estadísticas también quepan */
+    #graph-stats {
+        font-size: 0.8rem !important; /* Ajusta el tamaño de las stats */
+        text-align: center !important;
+    }
 }
 
 /* Agrupar botones para que no se rompa el layout */

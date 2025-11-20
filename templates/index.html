@@ -2,103 +2,97 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"> 
     <title>Bacon: Director's Cut</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
-<body>
-    
-    <div class="main-container">
+<body>   
+    <div class="main-container"> 
         <aside class="sidebar">
-            <div class="sidebar-header">
-                <h2>🎬 Filtros</h2>
+            <div class="sidebar-header" id="filter-toggle-btn">
+                <h2>🎬 Filtros <span id="toggle-icon">▼</span></h2>
             </div>
-
-            <div class="filter-group">
-                <label>
-                    Perfil 
-                    <span class="help-icon" data-tooltip="• Velocidad: El camino más corto posible (BFS).&#10;• Casual: Busca películas buenas.&#10;• Crítico: Modo Snob. Busca joyas ocultas.">ⓘ</span>
-                </label>
-                <div class="radio-group">
-                    <label><input type="radio" name="mode" value="Velocidad" checked="checked"> Velocidad</label>
-                    <label><input type="radio" name="mode" value="Casual"> Casual</label>
-                    <label><input type="radio" name="mode" value="Crítico"> Crítico</label>
+            <div id="filters-body" class="filters-body">
+                <div class="filter-group">
+                    <label>
+                        Perfil 
+                        <span class="help-icon" data-tooltip="• Velocidad: El camino más corto posible (BFS).&#10;• Casual: Busca películas buenas.&#10;• Crítico: Modo Snob. Busca joyas ocultas.">ⓘ</span>
+                    </label>
+                    <div class="radio-group">
+                        <label><input type="radio" name="mode" value="Velocidad" checked="checked"> Velocidad</label>
+                        <label><input type="radio" name="mode" value="Casual"> Casual</label>
+                        <label><input type="radio" name="mode" value="Crítico"> Crítico</label>
+                    </div>
                 </div>
-            </div>
 
-            <div class="filter-group">
-                <label>
-                    Género
-                    <span class="help-icon" data-tooltip="Filtra películas que contengan este género.">ⓘ</span>
-                </label>
-                <select id="genre-select">
-                    {% for genero in generos %}
-                        <option value="{{ genero }}">{{ genero }}</option>
-                    {% endfor %}
-                </select>
-            </div>
-
-            <div class="filter-group">
-                <label>
-                    Año: <span id="year-disp">1920 - 2025</span>
-                    <span class="help-icon" data-tooltip="Rango de años de estreno.">ⓘ</span>
-                </label>
-                <div class="range-slider-container">
-                    <div class="slider-track"></div>
-                    <input type="range" id="year-min" min="1920" max="2025" value="1920">
-                    <input type="range" id="year-max" min="1920" max="2025" value="2025">
+                <div class="filter-group">
+                    <label>
+                        Género
+                        <span class="help-icon" data-tooltip="Filtra películas que contengan este género.">ⓘ</span>
+                    </label>
+                    <select id="genre-select">
+                        {% for genero in generos %}
+                            <option value="{{ genero }}">{{ genero }}</option>
+                        {% endfor %}
+                    </select>
                 </div>
-            </div>
 
-            <div class="filter-group">
-                <label>
-                    Rating: <span id="rating-disp">0 - 10</span>
-                    <span class="help-icon" data-tooltip="Rango de puntaje IMDb (0.0 a 10.0).">ⓘ</span>
-                </label>
-                <div class="range-slider-container">
-                    <div class="slider-track"></div>
-                    <input type="range" id="rating-min" min="0" max="10" step="0.1" value="0">
-                    <input type="range" id="rating-max" min="0" max="10" step="0.1" value="10">
+                <div class="filter-group">
+                    <label>
+                        Año: <span id="year-disp">1920 - 2025</span>
+                        <span class="help-icon" data-tooltip="Rango de años de estreno.">ⓘ</span>
+                    </label>
+                    <div class="range-slider-container">
+                        <div class="slider-track"></div>
+                        <input type="range" id="year-min" min="1920" max="2025" value="1920">
+                        <input type="range" id="year-max" min="1920" max="2025" value="2025">
+                    </div>
                 </div>
-            </div>
 
-            <div class="filter-group">
-                <label>
-                    Duración (min): <span id="dur-disp">0 - 300</span>
-                    <span class="help-icon" data-tooltip="Duración en minutos de la película.">ⓘ</span>
-                </label>
-                <div class="range-slider-container">
-                    <div class="slider-track"></div>
-                    <input type="range" id="dur-min" min="0" max="500" step="10" value="0">
-                    <input type="range" id="dur-max" min="0" max="500" step="10" value="500">
+                <div class="filter-group">
+                    <label>
+                        Rating: <span id="rating-disp">0 - 10</span>
+                        <span class="help-icon" data-tooltip="Rango de puntaje IMDb (0.0 a 10.0).">ⓘ</span>
+                    </label>
+                    <div class="range-slider-container">
+                        <div class="slider-track"></div>
+                        <input type="range" id="rating-min" min="0" max="10" step="0.1" value="0">
+                        <input type="range" id="rating-max" min="0" max="10" step="0.1" value="10">
+                    </div>
                 </div>
-            </div>
 
-            <div class="filter-group">
-                <label>
-                    Cant. Votos
-                    <span class="help-icon" data-tooltip="Mínimo y máximo de votos en IMDb (Popularidad).">ⓘ</span>
-                </label>
-                <div class="votes-inputs">
-                    <input type="number" id="votes-min" value="100" min="0">
-                    <span>-</span>
-                    <input type="number" id="votes-max" value="3500000" min="0">
+                <div class="filter-group">
+                    <label>
+                        Duración (min): <span id="dur-disp">0 - 300</span>
+                        <span class="help-icon" data-tooltip="Duración en minutos de la película.">ⓘ</span>
+                    </label>
+                    <div class="range-slider-container">
+                        <div class="slider-track"></div>
+                        <input type="range" id="dur-min" min="0" max="500" step="10" value="0">
+                        <input type="range" id="dur-max" min="0" max="500" step="10" value="500">
+                    </div>
                 </div>
-            </div>
-        </aside>
 
-        <main class="content">
-            
+                <div class="filter-group">
+                    <label>
+                        Cant. Votos
+                        <span class="help-icon" data-tooltip="Mínimo y máximo de votos en IMDb (Popularidad).">ⓘ</span>
+                    </label>
+                    <div class="votes-inputs">
+                        <input type="number" id="votes-min" value="100" min="0">
+                        <span>-</span>
+                        <input type="number" id="votes-max" value="3500000" min="0">
+                    </div>
+                </div>
+            </div> </aside> <main class="content">
             <div class="header-area">
                 <h1 class="main-title">Buscador de Grados de Bacon</h1>
-                
                 <p class="intro-text">
                     "Cualquier persona implicada en la industria cinematográfica de Hollywood puede relacionarse con <br>
                     Kevin Bacon mediante sus papeles en el cine en tan solo seis pasos".<br>
                     Este algoritmo encuentra el camino más corto entre <strong>cualquier par de actores</strong>... <br>
                     ¿El reto? Encontrar una conexión que llegue a los 6 grados... o intente superarlos.
                 </p>
-                
                 <div class="search-area">
                     <div class="input-group">
                         <label>Origen</label>
@@ -106,7 +100,6 @@
                         <input type="hidden" id="actor1-id">
                         <div id="actor1-suggestions" class="suggestions-box"></div>
                     </div>
-                    
                     <div class="input-group">
                         <label>Destino</label>
                         <input type="text" id="actor2-input" placeholder="Kevin Bacon..." autocomplete="off">
@@ -115,13 +108,11 @@
                     </div>
                     <div class="button-group">
                             <button id="search-btn" class="oscar-btn">BUSCAR</button>
-                            
                             <button id="lucky-btn" class="lucky-btn" title="¡Voy a tener suerte!">
                                 🎲
                             </button>
                     </div>
                 </div>
-                
                 <div id="error-msg" class="hidden"></div>
             </div>
 
@@ -131,18 +122,15 @@
             </div>
 
             <div id="degree-display" class="hidden">
-                Grados de Separación: <span id="degree-count">0</span>
+                <span class="degree-label">Grados de Separación:</span> 
+                <span id="degree-count">0</span>
                 <span id="graph-stats"></span> 
             </div>
 
             <div id="results-wrapper">
                 <div id="results-container"></div>
             </div>
-        </main>
-    </div>
-
-    <div id="global-tooltip"></div>
-
+        </main> </div> <div id="global-tooltip"></div>
     <script src="{{ url_for('static', filename='script.js') }}"></script>
 </body>
 </html>

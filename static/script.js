@@ -8,8 +8,9 @@ document.addEventListener('DOMContentLoaded', () => {
     initDualSlider('rating-min', 'rating-max', 'rating-disp');
     initDualSlider('dur-min', 'dur-max', 'dur-disp');
     
-    // Inicializar Tooltips
+    // Inicializar Tooltips y Filtros de celular
     setupTooltips();
+    setupMobileFilters();
     
     // Listener del botón buscar
     document.getElementById('search-btn').addEventListener('click', performSearch);
@@ -41,12 +42,17 @@ async function performSearch() {
     const degreeBox = document.getElementById('degree-display');
     const degreeNum = document.getElementById('degree-count');
     const statsDisplay = document.getElementById('graph-stats');
-    const btn = document.getElementById('search-btn'); // Referencia al botón
-    
+    const btn = document.getElementById('search-btn');
+    const resultsWrapper = document.getElementById('results-wrapper'); 
+
     // 1. Limpieza inicial
     errorEl.classList.add('hidden');
     degreeBox.classList.add('hidden');
     container.innerHTML = '';
+    
+    if (resultsWrapper) { 
+        resultsWrapper.style.display = 'none'; 
+    }
     
     if (!actor1 || !actor2) {
         errorEl.textContent = "Por favor selecciona ambos actores de la lista.";
@@ -77,11 +83,10 @@ async function performSearch() {
             body: JSON.stringify({ actor1, actor2, filtros })
         });
         
-        const data = await response.json();
+        // 🚨 USAMOS response.json() para simplicidad, asumiendo que tu backend ya está estable.
+        const data = await response.json(); 
 
-        // --- A. MOSTRAR ESTADÍSTICAS (Primero) ---
-        // Lo mostramos antes de validar errores. Si el filtro dejó 0 pelis, 
-        // el usuario necesita ver "(0 películas)" para entender el error.
+        // --- A. MOSTRAR ESTADÍSTICAS ---
         if (data.stats) {
             statsDisplay.innerHTML = `(${data.stats.peliculas.toLocaleString()} películas, ${data.stats.actores.toLocaleString()} actores)`;
             degreeBox.classList.remove('hidden');
@@ -100,20 +105,12 @@ async function performSearch() {
         // --- C. MANEJO DE ÉXITO ---
         degreeNum.textContent = data.grados;
         degreeNum.style.color = "var(--red-oscar)";
+        
+        if (resultsWrapper) {
+            resultsWrapper.style.display = 'flex'; 
+        }
 
-        // Pre-Carga de imágenes
-        const imagePromises = data.camino.map(step => {
-            return new Promise((resolve) => {
-                if (!step.img) { resolve(null); return; }
-                const imgObj = new Image();
-                imgObj.src = step.img;
-                imgObj.onload = () => resolve(step.img);
-                imgObj.onerror = () => resolve(null); 
-            });
-        });
-        await Promise.all(imagePromises);
-
-        // Renderizado de Tarjetas
+        // 🔥 Renderizado de Tarjetas (La única lógica que importa)
         data.camino.forEach((step, index) => {
             const tipoUrl = step.id.startsWith('nm') ? 'name' : 'title';
             const imdbUrl = `https://www.imdb.com/${tipoUrl}/${step.id}/`;
@@ -128,6 +125,7 @@ async function performSearch() {
             
             let mediaContent = '';
             if (step.img) {
+                // RENDERIZAMOS DIRECTAMENTE. Si la URL es mala, el onerror se encargará.
                 mediaContent = `<img src="${step.img}" onerror="this.parentNode.innerHTML='<div class=\\'card-placeholder\\'>${step.type === 'person' ? '👤' : '🎬'}</div>'">`;
             } else {
                 mediaContent = `<div class="card-placeholder">${step.type === 'person' ? '👤' : '🎬'}</div>`;
@@ -153,12 +151,15 @@ async function performSearch() {
         });
 
     } catch (e) {
-        console.error(e);
-        errorEl.textContent = "Error de conexión con el servidor.";
+        console.error("Error en la obtención o parseo de datos:", e);
+        errorEl.textContent = "Error de conexión con el servidor. (Verificar la URL de TMDB en Python)";
         errorEl.classList.remove('hidden');
+        
+        if (resultsWrapper) { 
+            resultsWrapper.style.display = 'none'; 
+        }
     } finally {
-        // --- 4. RESTAURAR ESTADO (Siempre) ---
-        // Esto asegura que el botón vuelva a funcionar incluso si hubo error
+        // --- 4. RESTAURAR ESTADO ---
         loader.classList.add('hidden');
         btn.innerText = originalBtnText;
         btn.disabled = false;
@@ -166,7 +167,6 @@ async function performSearch() {
     }
 }
 
-// --- 2. AUTOCOMPLETE ---
 // --- 2. AUTOCOMPLETE ---
 function setupAutocomplete(inputId, hiddenId, suggestionId) {
     const input = document.getElementById(inputId);
@@ -311,4 +311,30 @@ async function performLuckySearch() {
         // Resetear rotación del dado
         setTimeout(() => { btn.style.transform = 'rotate(0deg)'; }, 500);
     }
+}
+
+function setupMobileFilters() {
+    const toggleBtn = document.getElementById('filter-toggle-btn');
+    const filtersBody = document.getElementById('filters-body');
+    const toggleIcon = document.getElementById('toggle-icon');
+
+    if (!toggleBtn || !filtersBody) return; // Salir si no estamos en la página correcta
+    
+    // En la carga inicial, asumimos que estamos en desktop si el ancho es > 768px
+    // En mobile, el sidebar.header ya tiene cursor: pointer;
+
+    toggleBtn.addEventListener('click', () => {
+        // Solo aplicar el toggle si estamos en una pantalla pequeña
+        if (window.innerWidth <= 768) {
+            filtersBody.classList.toggle('is-open');
+            toggleBtn.classList.toggle('active');
+            
+            // Lógica para cambiar la flecha
+            if (filtersBody.classList.contains('is-open')) {
+                toggleIcon.textContent = '▲';
+            } else {
+                toggleIcon.textContent = '▼';
+            }
+        }
+    });
 }
