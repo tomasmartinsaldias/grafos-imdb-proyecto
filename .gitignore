@@ -1,0 +1,13 @@
+# --- Secretos (NUNCA SUBIR) ---
+.env
+
+# --- Archivos Gigantes de Datos ---
+*.tsv
+*.csv
+*.pkl
+
+# --- Basura de Python ---
+__pycache__/
+*.pyc
+venv/
+.DS_Store
