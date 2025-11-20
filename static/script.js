@@ -29,20 +29,21 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 });
 
-// --- 1. LÓGICA DE BÚSQUEDA (Aquí estaba el problema de los grados) ---
+// --- 1. LÓGICA DE BÚSQUEDA ---
 async function performSearch() {
     const actor1 = document.getElementById('actor1-id').value;
     const actor2 = document.getElementById('actor2-id').value;
     
+    // Referencias UI
     const container = document.getElementById('results-container');
     const loader = document.getElementById('loading');
     const errorEl = document.getElementById('error-msg');
-    
     const degreeBox = document.getElementById('degree-display');
     const degreeNum = document.getElementById('degree-count');
-    const statsDisplay = document.getElementById('graph-stats'); // El span de stats
+    const statsDisplay = document.getElementById('graph-stats');
+    const btn = document.getElementById('search-btn'); // Referencia al botón
     
-    // Limpieza inicial
+    // 1. Limpieza inicial
     errorEl.classList.add('hidden');
     degreeBox.classList.add('hidden');
     container.innerHTML = '';
@@ -52,9 +53,14 @@ async function performSearch() {
         errorEl.classList.remove('hidden'); return;
     }
 
+    // 2. Estado de Carga (UX)
+    const originalBtnText = btn.innerText;
+    btn.innerText = "⏳ Buscando...";
+    btn.disabled = true;
+    btn.style.opacity = "0.7";
     loader.classList.remove('hidden');
 
-    // Filtros (IGUAL QUE ANTES)
+    // 3. Recolección de Filtros
     const filtros = {
         anio: [parseFloat(document.getElementById('year-min').value), parseFloat(document.getElementById('year-max').value)],
         rating: [parseFloat(document.getElementById('rating-min').value), parseFloat(document.getElementById('rating-max').value)],
@@ -72,31 +78,30 @@ async function performSearch() {
         });
         
         const data = await response.json();
-        loader.classList.add('hidden'); // Ocultamos loader
 
-        // --- 1. MOSTRAR ESTADÍSTICAS (SIEMPRE QUE HAYA) ---
-        // Ahora lo hacemos fuera de la validación de éxito/error
+        // --- A. MOSTRAR ESTADÍSTICAS (Primero) ---
+        // Lo mostramos antes de validar errores. Si el filtro dejó 0 pelis, 
+        // el usuario necesita ver "(0 películas)" para entender el error.
         if (data.stats) {
             statsDisplay.innerHTML = `(${data.stats.peliculas.toLocaleString()} películas, ${data.stats.actores.toLocaleString()} actores)`;
-            degreeBox.classList.remove('hidden'); // Mostramos la barra
+            degreeBox.classList.remove('hidden');
         }
 
-        // --- 2. MANEJO DE ERRORES (CAMINO NO ENCONTRADO) ---
+        // --- B. MANEJO DE ERRORES ---
         if (data.error) {
             errorEl.textContent = data.error;
             errorEl.classList.remove('hidden');
             
-            // Si hay error, cambiamos el título de grados por algo visualmente claro
             degreeNum.textContent = "⛔"; 
-            degreeNum.style.color = "#555"; // Color gris para indicar "vacío"
-            return; // Cortamos aquí, no hay tarjetas que renderizar
+            degreeNum.style.color = "#555";
+            return; 
         }
 
-        // --- 3. MANEJO DE ÉXITO ---
+        // --- C. MANEJO DE ÉXITO ---
         degreeNum.textContent = data.grados;
-        degreeNum.style.color = "var(--red-oscar)"; // Restauramos el rojo
+        degreeNum.style.color = "var(--red-oscar)";
 
-        // Pre-Carga de imágenes (IGUAL)
+        // Pre-Carga de imágenes
         const imagePromises = data.camino.map(step => {
             return new Promise((resolve) => {
                 if (!step.img) { resolve(null); return; }
@@ -108,7 +113,7 @@ async function performSearch() {
         });
         await Promise.all(imagePromises);
 
-        // Renderizado de Tarjetas (IGUAL)
+        // Renderizado de Tarjetas
         data.camino.forEach((step, index) => {
             const tipoUrl = step.id.startsWith('nm') ? 'name' : 'title';
             const imdbUrl = `https://www.imdb.com/${tipoUrl}/${step.id}/`;
@@ -149,9 +154,15 @@ async function performSearch() {
 
     } catch (e) {
         console.error(e);
-        loader.classList.add('hidden');
         errorEl.textContent = "Error de conexión con el servidor.";
         errorEl.classList.remove('hidden');
+    } finally {
+        // --- 4. RESTAURAR ESTADO (Siempre) ---
+        // Esto asegura que el botón vuelva a funcionar incluso si hubo error
+        loader.classList.add('hidden');
+        btn.innerText = originalBtnText;
+        btn.disabled = false;
+        btn.style.opacity = "1";
     }
 }
 
