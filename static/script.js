@@ -14,6 +14,19 @@ document.addEventListener('DOMContentLoaded', () => {
     // Listener del botón buscar
     document.getElementById('search-btn').addEventListener('click', performSearch);
     document.getElementById('lucky-btn').addEventListener('click', performLuckySearch);
+        // Habilitar búsqueda con tecla ENTER en los inputs
+    ['actor1-input', 'actor2-input'].forEach(id => {
+        document.getElementById(id).addEventListener('keypress', function (e) {
+            if (e.key === 'Enter') {
+                // Opcional: Cerrar sugerencias si están abiertas
+                document.getElementById('actor1-suggestions').innerHTML = '';
+                document.getElementById('actor2-suggestions').innerHTML = '';
+                
+                // Disparar búsqueda
+                performSearch();
+            }
+        });
+    });
 });
 
 // --- 1. LÓGICA DE BÚSQUEDA (Aquí estaba el problema de los grados) ---

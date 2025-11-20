@@ -350,27 +350,47 @@ a.card-link:hover .card {
 }
 
 /* El contenedor que flota sobre todo */
-#global-tooltip {
+ #global-tooltip {
+
     position: fixed; /* Se fija a la pantalla, ignorando el sidebar */
+
     visibility: hidden;
+
     opacity: 0;
-    
+
+   
+
     /* Estilo Hollywood */
+
     background: #FDFBF5;  
-    color: #1A1A1A;       
-    border: 2px solid var(--gold-medium); 
+
+    color: #1A1A1A;      
+
+    border: 2px solid var(--gold-medium);
+
     padding: 12px;
+
     border-radius: 6px;
+
     font-family: 'Cormorant Garamond', serif;
-    font-size: 0.95rem;   
-    font-weight: 600;     
+
+    font-size: 0.95rem;  
+
+    font-weight: 600;    
+
     line-height: 1.3;
-    width: 220px;
+
+    width: auto;
+
     z-index: 9999; /* Por encima de TODO */
+
     box-shadow: 0 5px 20px rgba(0,0,0,0.2);
+
     pointer-events: none; /* Para que no moleste al mouse */
+
     transition: opacity 0.2s ease;
-}
+
+} 
 
 #global-tooltip.visible {
     visibility: visible;
