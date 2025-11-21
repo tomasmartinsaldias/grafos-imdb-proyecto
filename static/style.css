@@ -449,6 +449,25 @@ a.card-link:hover .card {
     font-weight: 600;
 }
 
+.monograph-link {
+    display: inline-block;
+    margin-top: 5px;
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: var(--red-oscar); /* Color rojo del tema */
+    text-decoration: none;
+    border-bottom: 1px solid transparent;
+    transition: all 0.3s ease;
+    padding-bottom: 2px;
+}
+
+.monograph-link:hover {
+    color: var(--red-hover);
+    border-bottom: 1px solid var(--red-hover); /* Subrayado elegante al pasar el mouse */
+    transform: translateY(-1px);
+}
+
 /* 2. ESTILO DEL CONTADOR DE GRADOS */
 #degree-display {
     flex-shrink: 0; 
