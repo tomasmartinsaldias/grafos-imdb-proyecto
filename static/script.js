@@ -152,7 +152,7 @@ async function performSearch() {
 
     } catch (e) {
         console.error("Error en la obtención o parseo de datos:", e);
-        errorEl.textContent = "Error de conexión con el servidor. (Verificar la URL de TMDB en Python)";
+        errorEl.textContent = "Error de conexión con el servidor.";
         errorEl.classList.remove('hidden');
         
         if (resultsWrapper) { 
