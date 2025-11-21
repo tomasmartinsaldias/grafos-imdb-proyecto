@@ -124,7 +124,7 @@ def construir_grafo_y_metadata(ids_validos, ratings_map):
             tconst = row[0]
             # Solo guardamos si está en el grafo (conectada)
             if tconst in grafo:
-                titulo = row[2]
+                titulo = row[3]
                 anio = int(row[5]) if row[5].isdigit() else 0
                 generos = row[8].split(',')
                 # Recuperamos rating del mapa que ya cargamos
