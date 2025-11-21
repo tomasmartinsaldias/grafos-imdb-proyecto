@@ -130,7 +130,7 @@ def ejecutar_etl_sql():
         for row in reader:
             tconst = row[0]
             if tconst in nodos_activos: # Solo si tiene conexiones
-                titulo = row[2]
+                titulo = row[3]
                 anio = int(row[5]) if row[5].isdigit() else 0
                 generos = row[8]
                 rat, vot = ratings_map.get(tconst, (0.0, 0))
