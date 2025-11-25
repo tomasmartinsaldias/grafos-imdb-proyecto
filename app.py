@@ -13,7 +13,7 @@ import re
 import unicodedata
 
 # Importamos tus algoritmos
-from algoritmos import bfs_bidireccional, dijkstra 
+from algoritmos import bfs_bidireccional, dijkstra, dijkstra_bidireccional
 
 load_dotenv()
 app = Flask(__name__)
@@ -223,13 +223,18 @@ def buscar():
         inicio_ts = time.time()
         
         if modo == 'Velocidad':
+            # BFS Bidireccional ya es óptimo para grafos no ponderados
             camino_ids = bfs_bidireccional(GRAFO, origen, destino, ids_validos=ids_validos)
+
         elif modo == 'Casual':
-            camino_ids = dijkstra(GRAFO, origen, destino, MAPA_PELICULAS, 
+            # AHORA USAMOS DIJKSTRA BIDIRECCIONAL (Más rápido)
+            camino_ids = dijkstra_bidireccional(GRAFO, origen, destino, MAPA_PELICULAS, 
                                 funcion_peso=calcular_peso_casual, ids_validos=ids_validos)
+
         elif modo in ['Crítico', 'Critico']:
-            camino_ids = dijkstra(GRAFO, origen, destino, MAPA_PELICULAS, 
-                                funcion_peso=calcular_peso_critico, ids_validos=ids_validos)
+            # AHORA USAMOS DIJKSTRA BIDIRECCIONAL (Más rápido)
+            camino_ids = dijkstra_bidireccional(GRAFO, origen, destino, MAPA_PELICULAS, 
+                            funcion_peso=calcular_peso_critico, ids_validos=ids_validos)
         else:
             camino_ids = None
 

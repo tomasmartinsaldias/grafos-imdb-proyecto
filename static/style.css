@@ -230,8 +230,14 @@ a.card-link { text-decoration: none; color: inherit; display: block; flex-shrink
     padding: 20px; border-radius: 10px; box-shadow: 0 0 10px rgba(0,0,0,0.1);
 }
 #error-msg { color: var(--red-oscar); text-align: center; font-weight: bold; margin: 10px 0; }
-.actor-selected { background-color: #FFF9E6 !important; border-color: #4ade80 !important; }
-
+.actor-selected { 
+    background-color: #FFF9E6 !important; 
+    border-color: var(--gold-dark) !important; 
+    border-width: 2px !important;
+    font-weight: 700;
+    color: var(--text-primary) !important;
+    box-shadow: 0 2px 8px rgba(184, 148, 31, 0.2);
+}
 /* =========================================
    7. DASHBOARD (ESTILO CINEMA PREMIUM)
    ========================================= */
