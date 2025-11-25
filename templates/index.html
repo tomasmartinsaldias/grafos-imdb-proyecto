@@ -6,7 +6,12 @@
     <title>Bacon: Director's Cut</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
-<body>   
+<body>
+    <nav class="top-nav-bar">
+        <a href="/dashboard" class="stats-link" title="Ver Dashboard">
+            <span class="icon">📊</span> Tendencias del Grafo
+        </a>
+    </nav>
     <div class="main-container"> 
         <aside class="sidebar">
             <div class="sidebar-header" id="filter-toggle-btn">
@@ -79,7 +84,7 @@
                         <span class="help-icon" data-tooltip="Mínimo y máximo de votos en IMDb (Popularidad).">ⓘ</span>
                     </label>
                     <div class="votes-inputs">
-                        <input type="number" id="votes-min" value="100" min="0">
+                        <input type="number" id="votes-min" value="450" min="450">
                         <span>-</span>
                         <input type="number" id="votes-max" value="3500000" min="0">
                     </div>

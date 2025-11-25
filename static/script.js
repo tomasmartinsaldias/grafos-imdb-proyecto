@@ -1,20 +1,23 @@
 document.addEventListener('DOMContentLoaded', () => {
-    // Inicializar componentes
-    setupAutocomplete('actor1-input', 'actor1-id', 'actor1-suggestions');
-    setupAutocomplete('actor2-input', 'actor2-id', 'actor2-suggestions');
+    // Inicializar componentes con seguridad
+    try { setupAutocomplete('actor1-input', 'actor1-id', 'actor1-suggestions'); } catch(e){}
+    try { setupAutocomplete('actor2-input', 'actor2-id', 'actor2-suggestions'); } catch(e){}
     
-    // Inicializar los Sliders Dobles
-    initDualSlider('year-min', 'year-max', 'year-disp');
-    initDualSlider('rating-min', 'rating-max', 'rating-disp');
-    initDualSlider('dur-min', 'dur-max', 'dur-disp');
+    try {
+        initDualSlider('year-min', 'year-max', 'year-disp');
+        initDualSlider('rating-min', 'rating-max', 'rating-disp');
+        initDualSlider('dur-min', 'dur-max', 'dur-disp');
+    } catch(e) { console.warn("Error sliders", e); }
     
-    // Inicializar Tooltips y Filtros de celular
-    setupTooltips();
-    setupMobileFilters();
+    try { setupTooltips(); } catch(e){}
+    try { setupMobileFilters(); } catch(e){}
     
-    // Listener del botón buscar
-    document.getElementById('search-btn').addEventListener('click', performSearch);
-    document.getElementById('lucky-btn').addEventListener('click', performLuckySearch);
+    // Listeners
+    const searchBtn = document.getElementById('search-btn');
+    if(searchBtn) searchBtn.addEventListener('click', performSearch);
+    
+    const luckyBtn = document.getElementById('lucky-btn');
+    if(luckyBtn) luckyBtn.addEventListener('click', performLuckySearch);
         // Habilitar búsqueda con tecla ENTER en los inputs
     ['actor1-input', 'actor2-input'].forEach(id => {
         document.getElementById(id).addEventListener('keypress', function (e) {

@@ -8,10 +8,10 @@ import unicodedata
 
 # --- CONFIGURACIÓN ---
 DB_NAME = "bacon.db"
-RAW_BASICS = "title.basics.tsv"
-RAW_PRINCIPALS = "title.principals.tsv"
-RAW_RATINGS = "title.ratings.tsv"
-RAW_NAMES = "name.basics.tsv"
+RAW_BASICS = "raw/title.basics.tsv"
+RAW_PRINCIPALS = "raw/title.principals.tsv"
+RAW_RATINGS = "raw/title.ratings.tsv"
+RAW_NAMES = "raw/name.basics.tsv"
 
 # 🔥 EL FILTRO MÁGICO: Solo películas con más de X votos
 # 500 es un buen balance. Si sigue pesando >100MB, subelo a 1000.
@@ -173,6 +173,59 @@ def ejecutar_etl_sql():
     c.execute('CREATE INDEX idx_aristas_origen ON aristas(origen)')
     c.execute('CREATE INDEX idx_nombres_limpio ON nombres(nombre_limpio)')
     c.execute('VACUUM') 
+    # --- PASO 6: CALCULAR Y PRE-EMPAQUETAR GLOBAL STATS ---
+    print("6️⃣  Calculando Top Global (Con Nombres y Títulos)...")
+    import json
+    
+    global_stats = {'peliculas': [], 'actores': []}
+
+    # A. Top Películas (Hacemos JOIN con la tabla peliculas directamente aquí)
+    # Esto trae título y año directamente.
+    query_pelis = """
+        SELECT a.origen, count(*) as grado, p.titulo, p.anio 
+        FROM aristas a
+        JOIN peliculas p ON a.origen = p.id
+        WHERE a.origen LIKE 'tt%' 
+        GROUP BY a.origen 
+        ORDER BY grado DESC 
+        LIMIT 20
+    """
+    cursor = conn.execute(query_pelis)
+    for row in cursor:
+        # row = (id, grado, titulo, anio)
+        global_stats['peliculas'].append({
+            'id': row[0],
+            'count': f"{row[1]} conex.",
+            'titulo': row[2],
+            'anio': row[3]
+        })
+
+    # B. Top Actores (JOIN con tabla actores)
+    query_actores = """
+        SELECT a.origen, count(*) as grado, ac.nombre, ac.anio_nac
+        FROM aristas a
+        JOIN actores ac ON a.origen = ac.id
+        WHERE a.origen LIKE 'nm%' 
+        GROUP BY a.origen 
+        ORDER BY grado DESC 
+        LIMIT 20
+    """
+    cursor = conn.execute(query_actores)
+    for row in cursor:
+        # row = (id, grado, nombre, anio_nac)
+        global_stats['actores'].append({
+            'id': row[0],
+            'count': f"{row[1]} conex.",
+            'titulo': row[2],  # Usamos la clave 'titulo' para estandarizar con el frontend
+            'anio': 'Actor'
+        })
+    
+    with open('global_stats.json', 'w') as f:
+        json.dump(global_stats, f)
+    print("   📊 global_stats.json generado (Datos pre-cargados).")
+
+    # --- FIN ---
+    conn.close()
     conn.close()
     
     size_mb = os.path.getsize(DB_NAME) / (1024*1024)

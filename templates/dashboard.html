@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"> 
+    <title>Bacon Analytics</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<script>
+    // Variable global para guardar los datos descargados
+    let GLOBAL_STATS = null;
+
+    document.addEventListener('DOMContentLoaded', () => {
+        loadDashboardData();
+    });
+
+    async function loadDashboardData() {
+        try {
+            const res = await fetch('/api/stats_comparativa');
+            GLOBAL_STATS = await res.json();
+            
+            // Cargar por defecto 'Global'
+            switchStats('Global');
+        } catch (e) {
+            console.error("Error cargando dashboard:", e);
+        }
+    }
+
+    // Función que se llama al hacer clic en los botones
+    function switchStats(mode) {
+        if (!GLOBAL_STATS) return;
+        
+        // 1. Actualizar botones
+        document.querySelectorAll('.tab-btn').forEach(btn => {
+            btn.classList.remove('active');
+            
+            // FIX: Convertimos ambos a minúsculas para comparar sin errores
+            // "VELOCIDAD" se convierte en "velocidad" y coincide con el modo
+            if(btn.innerText.toLowerCase().includes(mode.toLowerCase())) {
+                btn.classList.add('active');
+            }
+        });
+
+        // 2. Obtener datos
+        const data = GLOBAL_STATS[mode] || { peliculas: [], actores: [] };
+
+        // 3. Actualizar Títulos
+        document.getElementById('movies-title').innerText = "Películas Principales";
+        document.getElementById('actors-title').innerText = "Actores Principales";
+
+        // 4. Renderizar
+        renderList(data.peliculas, 'stats-movies-list', '🎬');
+        renderList(data.actores, 'stats-actors-list', '👤');
+    }
+
+    function renderList(list, containerId, icon) {
+        const container = document.getElementById(containerId);
+        if (!list || list.length === 0) {
+            container.innerHTML = '<div class="loading-placeholder">Sin datos para este modo aún.</div>';
+            return;
+        }
+
+        container.innerHTML = list.map(item => {
+            const imgHtml = item.img 
+                ? `<img src="${item.img}" onerror="this.parentNode.innerHTML='${icon}'">`
+                : icon;
+
+            return `
+            <div class="stat-card" title="${item.titulo}">
+                <div class="stat-img-box">${imgHtml}</div>
+                <div class="stat-info">
+                    <div class="stat-title">${item.titulo}</div>
+                    <div class="stat-count">🔥 ${item.count}</div>
+                </div>
+            </div>`;
+        }).join('');
+    }
+    // --- NUEVO: Scroll horizontal inteligente ---
+    function enableHorizontalScroll() {
+        const containers = document.querySelectorAll('.scrolling-wrapper');
+        
+        containers.forEach(container => {
+            container.addEventListener('wheel', (evt) => {
+                // Verificamos si podemos scrollear en la dirección solicitada
+                const isScrollingDown = evt.deltaY > 0;
+                const isScrollingUp = evt.deltaY < 0;
+                
+                const canScrollRight = container.scrollLeft < (container.scrollWidth - container.clientWidth - 1);
+                const canScrollLeft = container.scrollLeft > 0;
+
+                // Solo secuestramos el scroll si HAY contenido para mover
+                if ((isScrollingDown && canScrollRight) || (isScrollingUp && canScrollLeft)) {
+                    evt.preventDefault();
+                    // Usamos scrollBy para movimiento instantáneo (sin smooth css)
+                    container.scrollLeft += evt.deltaY;
+                }
+                // Si llegamos al tope, dejamos que la página scrollee normal
+            });
+        });
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+        loadDashboardData();
+        enableHorizontalScroll();
+    });
+    // --- FUNCIÓN CORREGIDA: Alternar Películas / Actores ---
+    function toggleType(btnElement, type) {
+        // 1. Referencias a las filas
+        const rowMovies = document.getElementById('row-movies');
+        const rowActors = document.getElementById('row-actors');
+        
+        // Si por alguna razón no existen los IDs en el HTML, paramos para no dar error
+        if (!rowMovies || !rowActors) {
+            console.error("Error: No encuentro los IDs 'row-movies' o 'row-actors'");
+            return;
+        }
+
+        // 2. Manejo visual de los botones (ESTADO ACTIVO)
+        // Quitamos la clase 'active' a TODOS los botones de tipo
+        document.querySelectorAll('.type-btn').forEach(btn => {
+            btn.classList.remove('active');
+        });
+        
+        // Se la ponemos SOLO al que acabamos de clickear (pasado como argumento)
+        if (btnElement) {
+            btnElement.classList.add('active');
+        }
+
+        // 3. Mostrar/Ocultar filas (LÓGICA)
+        if (type === 'movies') {
+            rowMovies.style.display = 'flex'; // Mostrar Pelis
+            rowActors.style.display = 'none'; // Ocultar Actores
+        } else {
+            rowMovies.style.display = 'none'; // Ocultar Pelis
+            rowActors.style.display = 'flex'; // Mostrar Actores
+        }
+    }
+</script>
+<body class="dashboard-body">
+
+    <nav class="dash-nav">
+        <h1>🎬 Estadísticas del Grafo</h1>
+        <a href="/" class="oscar-btn small-btn">⬅ Volver al Buscador</a>
+    </nav>
+
+    <div class="stats-header-group">
+        <p class="intro-text-dash">
+            Descubre qué actores y películas actúan como los verdaderos "conectores" 
+            según el estilo de búsqueda.
+        </p>
+        
+        <div class="mode-tabs">
+            <button class="tab-btn active" onclick="switchStats('Global')">Global (Teórico)</button>
+            <button class="tab-btn" onclick="switchStats('Velocidad')">Velocidad</button>
+            <button class="tab-btn" onclick="switchStats('Casual')">Casual</button>
+            <button class="tab-btn" onclick="switchStats('Crítico')">Crítico</button>
+        </div>
+        <div class="type-filter">
+            <button class="type-btn active" onclick="toggleType(this, 'movies')">Ver Películas</button>
+            <button class="type-btn" onclick="toggleType(this, 'actors')">Ver Actores</button>
+        </div>
+    </div> <div id="row-movies" class="stats-row">
+        <h4 id="movies-title">Películas Principales</h4>
+        <div id="stats-movies-list" class="scrolling-wrapper">
+            <div class="loading-placeholder">Cargando...</div>
+        </div>
+    </div>
+
+    <div id="row-actors" class="stats-row" style="display: none;">
+        <h4 id="actors-title">Actores Principales</h4>
+        <div id="stats-actors-list" class="scrolling-wrapper">
+            <div class="loading-placeholder">Cargando...</div>
+        </div>
+    </div>
+
+    <script src="{{ url_for('static', filename='script.js') }}"></script>
+    <script>
+        // Script inline para forzar la carga inmediata al entrar a esta página
+        document.addEventListener('DOMContentLoaded', () => {
+            if(typeof updateComparisonStats === 'function') {
+                updateComparisonStats();
+            }
+        });
+    </script>
+</body>
+</html>
