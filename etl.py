@@ -7,17 +7,16 @@ import re
 import unicodedata
 
 # --- CONFIGURACIÓN ---
-RAW_BASICS = "title.basics.tsv"
-RAW_PRINCIPALS = "title.principals.tsv"
-RAW_RATINGS = "title.ratings.tsv"
-RAW_NAMES = "name.basics.tsv"
+RAW_BASICS = "raw/title.basics.tsv"
+RAW_PRINCIPALS = "raw/title.principals.tsv"
+RAW_RATINGS = "raw/title.ratings.tsv"
+RAW_NAMES = "raw/name.basics.tsv"
 
 OUTPUT_GRAFO = "grafo_bacon.pkl"
 OUTPUT_METADATA = "metadata_bacon.pkl"
 
-# 🔥 FILTRO DE CALIDAD PARA RAM
-# Al ponerlo aquí, ahorramos cientos de MB de RAM al no cargar "basura".
-MIN_VOTOS = 100  # Puedes ser más permisivo en local (RAM) que en Render
+# 🔥 FILTRO DE CALIDAD
+MIN_VOTOS = 100 
 
 def normalizar_texto(texto):
     if not texto: return ""
@@ -33,7 +32,6 @@ def obtener_peliculas_validas_con_ratings():
     """
     print(f"1️⃣  Cargando Ratings y Filtrando por {MIN_VOTOS} votos...")
     
-    # A. Cargar Ratings primero (solo los populares)
     ratings_map = {}
     peliculas_populares = set()
     
@@ -55,7 +53,6 @@ def obtener_peliculas_validas_con_ratings():
 
     print(f"   -> {len(peliculas_populares):,} películas pasaron el filtro de votos.")
 
-    # B. Cruzar con title.basics (Solo Cine y TV)
     print("2️⃣  Cruzando con Tipos (Movie/TV)...")
     validas_finales = set()
     
@@ -104,7 +101,7 @@ def construir_grafo_y_metadata(ids_validos, ratings_map):
             if df.empty: continue
             
             for peli, actor in zip(df['tconst'], df['nconst']):
-                # Grafo Bidireccional en RAM
+                # Grafo Bidireccional
                 if peli not in grafo: grafo[peli] = []
                 grafo[peli].append(actor)
                 
@@ -122,24 +119,20 @@ def construir_grafo_y_metadata(ids_validos, ratings_map):
         next(reader)
         for row in reader:
             tconst = row[0]
-            # Solo guardamos si está en el grafo (conectada)
             if tconst in grafo:
                 titulo = row[3]
                 anio = int(row[5]) if row[5].isdigit() else 0
                 generos = row[8].split(',')
-                # Recuperamos rating del mapa que ya cargamos
                 rat, vot = ratings_map.get(tconst, (0.0, 0))
-                
-                # Guardamos tupla optimizada
-                # (Titulo, Año, Generos, Duracion, Rating, Votos)
                 dur = int(row[7]) if row[7].isdigit() else 0
+                
                 mapa_peliculas[tconst] = (titulo, anio, generos, dur, rat, vot)
                 
                 for g in generos:
                     if g != '\\N': lista_generos.add(g)
 
     # --- C. METADATOS ACTORES ---
-    print("5️⃣  Procesando Metadatos Actores...")
+    print("5️⃣  Procesando Metadatos Actores y Generando Candidatos...")
     with open(RAW_NAMES, 'r', encoding='utf-8') as f:
         reader = csv.reader(f, delimiter='\t')
         next(reader)
@@ -157,26 +150,51 @@ def construir_grafo_y_metadata(ids_validos, ratings_map):
                 if nombre_limpio not in mapa_nombres: mapa_nombres[nombre_limpio] = []
                 mapa_nombres[nombre_limpio].append(nconst)
                 
-                # Candidatos (Lógica Anti-Luca)
-                conexiones = len(grafo[nconst])
-                if len(candidatos) < 10000 and conexiones >= 5:
-                    candidatos.append({'id': nconst, 'name': nombre})
+                # --- CANDIDATOS (MODO RANDOM) ---
+                # Ahora agregamos a TODOS los que estén en el grafo.
+                # Ya pasaron el filtro de calidad (>100 votos en sus películas).
+                candidatos.append({'id': nconst, 'name': nombre})
 
     print(f"   ✅ Todo procesado en {time.time() - inicio:.2f}s.")
+    print(f"   🎲 Total de candidatos para 'Voy a tener suerte': {len(candidatos):,}")
+
+    print("6️⃣  Calculando Centralidad Global (Top Teórico)...")
     
+    # Separamos nodos por tipo
+    nodos_peliculas = []
+    nodos_actores = []
+    
+    for nodo, vecinos in grafo.items():
+        grado = len(vecinos)
+        if nodo.startswith('tt'):
+            nodos_peliculas.append((nodo, grado))
+        elif nodo.startswith('nm'):
+            nodos_actores.append((nodo, grado))
+            
+    # Ordenamos por grado (mayor a menor) y tomamos Top 15
+    top_peli_teorico = sorted(nodos_peliculas, key=lambda x: x[1], reverse=True)[:15]
+    top_actor_teorico = sorted(nodos_actores, key=lambda x: x[1], reverse=True)[:15]
+    
+    print(f"   🏆 Top Peli: {top_peli_teorico[0][0]} ({top_peli_teorico[0][1]} conexiones)")
+    print(f"   🏆 Top Actor: {top_actor_teorico[0][0]} ({top_actor_teorico[0][1]} conexiones)")
+
     # Empaquetamos todo
     metadata_pack = {
         'peliculas': mapa_peliculas,
         'actores': mapa_actores,
         'nombres': mapa_nombres,
         'generos': sorted(list(lista_generos)),
-        'candidatos': candidatos
+        'candidatos': candidatos,
+        'global_stats': { # <--- NUEVO CAMPO
+            'peliculas': top_peli_teorico, # Lista de tuplas (id, grado)
+            'actores': top_actor_teorico
+        }
     }
     
     return grafo, metadata_pack
-
+    
 def ejecutar_etl_ram():
-    print("🚀 INICIANDO ETL RAM (MODO LOCAL)...")
+    print("🚀 INICIANDO ETL RAM...")
     
     # 1. Obtener IDs válidos
     ids_validos, ratings_map = obtener_peliculas_validas_con_ratings()

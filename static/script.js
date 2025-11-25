@@ -1,66 +1,86 @@
 document.addEventListener('DOMContentLoaded', () => {
-    // Inicializar componentes
-    setupAutocomplete('actor1-input', 'actor1-id', 'actor1-suggestions');
-    setupAutocomplete('actor2-input', 'actor2-id', 'actor2-suggestions');
+    console.log("🎬 Iniciando Bacon App...");
+
+    // 1. Inicializar Componentes (Protegidos con try-catch individual)
+    try { setupAutocomplete('actor1-input', 'actor1-id', 'actor1-suggestions'); } catch(e){ console.error("Error Autocomplete 1:", e); }
+    try { setupAutocomplete('actor2-input', 'actor2-id', 'actor2-suggestions'); } catch(e){ console.error("Error Autocomplete 2:", e); }
     
-    // Inicializar los Sliders Dobles
-    initDualSlider('year-min', 'year-max', 'year-disp');
-    initDualSlider('rating-min', 'rating-max', 'rating-disp');
-    initDualSlider('dur-min', 'dur-max', 'dur-disp');
+    try {
+        initDualSlider('year-min', 'year-max', 'year-disp');
+        initDualSlider('rating-min', 'rating-max', 'rating-disp');
+        initDualSlider('dur-min', 'dur-max', 'dur-disp');
+    } catch(e) { console.error("Error Sliders:", e); }
     
-    // Inicializar Tooltips
-    setupTooltips();
-    
-    // Listener del botón buscar
-    document.getElementById('search-btn').addEventListener('click', performSearch);
-    document.getElementById('lucky-btn').addEventListener('click', performLuckySearch);
-        // Habilitar búsqueda con tecla ENTER en los inputs
+    try { setupTooltips(); } catch(e) { console.error("Error Tooltips:", e); }
+
+    // 2. Listeners de Botones (LO MÁS IMPORTANTE)
+    const btnSearch = document.getElementById('search-btn');
+    const btnLucky = document.getElementById('lucky-btn');
+
+    if (btnSearch) {
+        btnSearch.addEventListener('click', performSearch);
+        console.log("✅ Botón BUSCAR activado");
+    } else {
+        console.error("❌ No encuentro el botón 'search-btn' en el HTML");
+    }
+
+    if (btnLucky) {
+        btnLucky.addEventListener('click', performLuckySearch);
+        console.log("✅ Botón SUERTE activado");
+    } else {
+        console.error("❌ No encuentro el botón 'lucky-btn' en el HTML");
+    }
+
+    // Tecla Enter
     ['actor1-input', 'actor2-input'].forEach(id => {
-        document.getElementById(id).addEventListener('keypress', function (e) {
-            if (e.key === 'Enter') {
-                // Opcional: Cerrar sugerencias si están abiertas
-                document.getElementById('actor1-suggestions').innerHTML = '';
-                document.getElementById('actor2-suggestions').innerHTML = '';
-                
-                // Disparar búsqueda
-                performSearch();
-            }
-        });
+        const el = document.getElementById(id);
+        if(el) {
+            el.addEventListener('keypress', function (e) {
+                if (e.key === 'Enter') {
+                    document.getElementById('actor1-suggestions').innerHTML = '';
+                    document.getElementById('actor2-suggestions').innerHTML = '';
+                    performSearch();
+                }
+            });
+        }
     });
+
+    // 3. Cargar Estadísticas (Al final, para no bloquear lo anterior)
+    updateComparisonStats();
 });
 
-// --- 1. LÓGICA DE BÚSQUEDA ---
+// --- LÓGICA DE BÚSQUEDA ---
 async function performSearch() {
+    console.log("🖱️ Click en Buscar detectado");
     const actor1 = document.getElementById('actor1-id').value;
     const actor2 = document.getElementById('actor2-id').value;
     
-    // Referencias UI
     const container = document.getElementById('results-container');
     const loader = document.getElementById('loading');
     const errorEl = document.getElementById('error-msg');
     const degreeBox = document.getElementById('degree-display');
     const degreeNum = document.getElementById('degree-count');
     const statsDisplay = document.getElementById('graph-stats');
-    const btn = document.getElementById('search-btn'); // Referencia al botón
+    const btn = document.getElementById('search-btn');
     
-    // 1. Limpieza inicial
+    // Limpieza
     errorEl.classList.add('hidden');
     degreeBox.classList.add('hidden');
     container.innerHTML = '';
     
     if (!actor1 || !actor2) {
-        errorEl.textContent = "Por favor selecciona ambos actores de la lista.";
-        errorEl.classList.remove('hidden'); return;
+        errorEl.textContent = "⚠️ Selecciona ambos actores de la lista sugerida.";
+        errorEl.classList.remove('hidden'); 
+        return;
     }
 
-    // 2. Estado de Carga (UX)
+    // Estado de Carga
     const originalBtnText = btn.innerText;
     btn.innerText = "⏳ Buscando...";
     btn.disabled = true;
-    btn.style.opacity = "0.7";
     loader.classList.remove('hidden');
 
-    // 3. Recolección de Filtros
+    // Recolección de Filtros
     const filtros = {
         anio: [parseFloat(document.getElementById('year-min').value), parseFloat(document.getElementById('year-max').value)],
         rating: [parseFloat(document.getElementById('rating-min').value), parseFloat(document.getElementById('rating-max').value)],
@@ -77,43 +97,32 @@ async function performSearch() {
             body: JSON.stringify({ actor1, actor2, filtros })
         });
         
+        if (!response.ok) throw new Error(`Error servidor: ${response.status}`);
+
         const data = await response.json();
 
-        // --- A. MOSTRAR ESTADÍSTICAS (Primero) ---
-        // Lo mostramos antes de validar errores. Si el filtro dejó 0 pelis, 
-        // el usuario necesita ver "(0 películas)" para entender el error.
         if (data.stats) {
-            statsDisplay.innerHTML = `(${data.stats.peliculas.toLocaleString()} películas, ${data.stats.actores.toLocaleString()} actores)`;
+            if(statsDisplay) statsDisplay.innerHTML = `(${data.stats.peliculas.toLocaleString()} películas)`;
             degreeBox.classList.remove('hidden');
         }
 
-        // --- B. MANEJO DE ERRORES ---
         if (data.error) {
             errorEl.textContent = data.error;
             errorEl.classList.remove('hidden');
-            
-            degreeNum.textContent = "⛔"; 
-            degreeNum.style.color = "#555";
+            if(degreeNum) {
+                degreeNum.textContent = "⛔"; 
+                degreeNum.style.color = "#555";
+            }
             return; 
         }
 
-        // --- C. MANEJO DE ÉXITO ---
-        degreeNum.textContent = data.grados;
-        degreeNum.style.color = "var(--red-oscar)";
+        // Éxito
+        if(degreeNum) {
+            degreeNum.textContent = data.grados;
+            degreeNum.style.color = "var(--red-oscar)";
+        }
 
-        // Pre-Carga de imágenes
-        const imagePromises = data.camino.map(step => {
-            return new Promise((resolve) => {
-                if (!step.img) { resolve(null); return; }
-                const imgObj = new Image();
-                imgObj.src = step.img;
-                imgObj.onload = () => resolve(step.img);
-                imgObj.onerror = () => resolve(null); 
-            });
-        });
-        await Promise.all(imagePromises);
-
-        // Renderizado de Tarjetas
+        // Renderizado
         data.camino.forEach((step, index) => {
             const tipoUrl = step.id.startsWith('nm') ? 'name' : 'title';
             const imdbUrl = `https://www.imdb.com/${tipoUrl}/${step.id}/`;
@@ -152,32 +161,32 @@ async function performSearch() {
             }
         });
 
+        // Actualizar estadísticas globales después de búsqueda exitosa
+        updateComparisonStats();
+
     } catch (e) {
-        console.error(e);
-        errorEl.textContent = "Error de conexión con el servidor.";
+        console.error("Error en búsqueda:", e);
+        errorEl.textContent = "Error de conexión o servidor.";
         errorEl.classList.remove('hidden');
     } finally {
-        // --- 4. RESTAURAR ESTADO (Siempre) ---
-        // Esto asegura que el botón vuelva a funcionar incluso si hubo error
         loader.classList.add('hidden');
         btn.innerText = originalBtnText;
         btn.disabled = false;
-        btn.style.opacity = "1";
     }
 }
 
-// --- 2. AUTOCOMPLETE ---
-// --- 2. AUTOCOMPLETE ---
+// --- AUTOCOMPLETE ---
 function setupAutocomplete(inputId, hiddenId, suggestionId) {
     const input = document.getElementById(inputId);
     const hidden = document.getElementById(hiddenId);
     const box = document.getElementById(suggestionId);
+    if(!input || !hidden || !box) return;
+
     let timeout = null;
 
     input.addEventListener('input', () => {
         hidden.value = ''; 
-        input.style.borderColor = 'var(--gold-medium)';
-        input.classList.remove('actor-selected'); // <-- NUEVO: Quitar color si el usuario escribe
+        input.classList.remove('actor-selected');
         
         clearTimeout(timeout);
         const val = input.value;
@@ -189,11 +198,6 @@ function setupAutocomplete(inputId, hiddenId, suggestionId) {
                 const data = await res.json();
                 
                 box.innerHTML = '';
-                if (data.length === 0) {
-                    // ... (sin resultados)
-                    return;
-                }
-
                 data.forEach(item => {
                     const div = document.createElement('div');
                     div.className = 'suggestion-item';
@@ -202,24 +206,24 @@ function setupAutocomplete(inputId, hiddenId, suggestionId) {
                         input.value = item.text.split('(')[0].trim();
                         hidden.value = item.id;
                         box.innerHTML = '';
-                        input.style.borderColor = 'var(--gold-dark)';
-                        input.style.borderWidth = '2px';
-                        input.classList.add('actor-selected'); // <-- NUEVO: Añadir color al seleccionar
+                        input.classList.add('actor-selected');
                     };
                     box.appendChild(div);
                 });
-            } catch(e) { console.log(e); }
+            } catch(e) { console.error(e); }
         }, 300);
     });
     
     document.addEventListener('click', (e) => { if (e.target !== input) box.innerHTML = ''; });
 }
 
-// --- 3. SLIDERS DOBLES ---
+// --- SLIDERS ---
 function initDualSlider(minId, maxId, dispId) {
     const sliderMin = document.getElementById(minId);
     const sliderMax = document.getElementById(maxId);
     const display = document.getElementById(dispId);
+    if(!sliderMin || !sliderMax) return; 
+
     const track = sliderMin.parentElement.querySelector('.slider-track');
 
     function update() {
@@ -234,7 +238,6 @@ function initDualSlider(minId, maxId, dispId) {
         }
 
         display.textContent = `${minVal} - ${maxVal}`;
-
         const range = sliderMin.max - sliderMin.min;
         const percent1 = ((minVal - sliderMin.min) / range) * 100;
         const percent2 = ((maxVal - sliderMin.min) / range) * 100;
@@ -246,10 +249,11 @@ function initDualSlider(minId, maxId, dispId) {
     update();
 }
 
-// --- 4. TOOLTIPS FLOTANTES ---
+// --- TOOLTIPS ---
 function setupTooltips() {
     const tooltip = document.getElementById('global-tooltip');
     const icons = document.querySelectorAll('.help-icon');
+    if(!tooltip) return;
 
     icons.forEach(icon => {
         icon.addEventListener('mouseenter', () => {
@@ -258,10 +262,8 @@ function setupTooltips() {
             tooltip.innerText = text;
             tooltip.classList.add('visible');
             const rect = icon.getBoundingClientRect();
-            const left = rect.right + 15; 
-            const top = rect.top - 10;    
-            tooltip.style.left = `${left}px`;
-            tooltip.style.top = `${top}px`;
+            tooltip.style.left = `${rect.right + 15}px`;
+            tooltip.style.top = `${rect.top - 10}px`;
         });
         icon.addEventListener('mouseleave', () => {
             tooltip.classList.remove('visible');
@@ -269,12 +271,13 @@ function setupTooltips() {
     });
 }
 
+// --- RANDOM (LUCKY) ---
 async function performLuckySearch() {
+    console.log("🎲 Random click");
     const loader = document.getElementById('loading');
     const errorEl = document.getElementById('error-msg');
     const btn = document.getElementById('lucky-btn');
     
-    // Animación simple: girar el dado mientras carga
     btn.style.transition = 'transform 0.5s';
     btn.style.transform = 'rotate(360deg)';
     
@@ -288,27 +291,68 @@ async function performLuckySearch() {
             return;
         }
         
-        // 1. Rellenar Inputs Visuales
         document.getElementById('actor1-input').value = data.actor1.name;
         document.getElementById('actor2-input').value = data.actor2.name;
-        
-        // 2. Rellenar IDs Ocultos (Crucial para la búsqueda)
         document.getElementById('actor1-id').value = data.actor1.id;
         document.getElementById('actor2-id').value = data.actor2.id;
         
-        // 3. Efecto visual de selección
         document.getElementById('actor1-input').classList.add('actor-selected');
         document.getElementById('actor2-input').classList.add('actor-selected');
         
-        // 4. Disparar la búsqueda automáticamente
         performSearch();
         
     } catch (e) {
         console.error(e);
-        errorEl.textContent = "Error conectando con el oráculo del cine.";
+        errorEl.textContent = "Error buscando actores aleatorios.";
         errorEl.classList.remove('hidden');
     } finally {
-        // Resetear rotación del dado
         setTimeout(() => { btn.style.transform = 'rotate(0deg)'; }, 500);
+    }
+}
+
+// --- ESTADÍSTICAS COMPARATIVAS ---
+async function updateComparisonStats() {
+    console.log("📊 Actualizando dashboard...");
+    try {
+        const res = await fetch('/api/stats_comparativa');
+        if(!res.ok) return;
+        
+        const data = await res.json();
+        
+        // Función auxiliar para crear tarjetas
+        const createCards = (list, containerId, icon) => {
+            const container = document.getElementById(containerId);
+            if (!container) return;
+
+            if (list.length === 0) {
+                container.innerHTML = '<div style="color:#777; font-style:italic; padding:10px;">Aún no hay datos. ¡Haz una búsqueda!</div>';
+                return;
+            }
+
+            container.innerHTML = list.map(item => {
+                // Usamos imagen si viene, si no, el placeholder
+                const imgHtml = item.img 
+                    ? `<img src="${item.img}" onerror="this.parentNode.innerHTML='${icon}'">`
+                    : icon;
+
+                return `
+                <div class="stat-card" title="${item.titulo}">
+                    <div class="stat-img-box">${imgHtml}</div>
+                    <div class="stat-info">
+                        <div class="stat-title">${item.titulo}</div>
+                        <div class="stat-count">🔥 ${item.count} usos</div>
+                    </div>
+                </div>`;
+            }).join('');
+        };
+
+        // Renderizar Películas
+        createCards(data.peliculas, 'stats-movies-list', '🎬');
+        
+        // Renderizar Actores
+        createCards(data.actores, 'stats-actors-list', '👤');
+
+    } catch (e) { 
+        console.warn("Error cargando dashboard", e); 
     }
 }

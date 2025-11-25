@@ -11,7 +11,10 @@
         <aside class="sidebar">
             <div class="sidebar-header">
                 <h2>🎬 Filtros</h2>
+                <div class="filter-group" style="text-align: center; margin-top: 20px; border-top: 1px solid #ccc; padding-top: 20px;">
             </div>
+
+            
 
             <div class="filter-group">
                 <label>
@@ -44,8 +47,8 @@
                 </label>
                 <div class="range-slider-container">
                     <div class="slider-track"></div>
-                    <input type="range" id="year-min" min="1920" max="2025" value="1920">
-                    <input type="range" id="year-max" min="1920" max="2025" value="2025">
+                    <input type="range" id="year-min" min="1920" max="2025" value="1920" tabindex="-1">
+                    <input type="range" id="year-max" min="1920" max="2025" value="2025" tabindex="-1">
                 </div>
             </div>
 
@@ -56,8 +59,8 @@
                 </label>
                 <div class="range-slider-container">
                     <div class="slider-track"></div>
-                    <input type="range" id="rating-min" min="0" max="10" step="0.1" value="0">
-                    <input type="range" id="rating-max" min="0" max="10" step="0.1" value="10">
+                    <input type="range" id="rating-min" min="0" max="10" step="0.1" value="0" tabindex="-1">
+                    <input type="range" id="rating-max" min="0" max="10" step="0.1" value="10" tabindex="-1">
                 </div>
             </div>
 
@@ -68,8 +71,8 @@
                 </label>
                 <div class="range-slider-container">
                     <div class="slider-track"></div>
-                    <input type="range" id="dur-min" min="0" max="500" step="10" value="0">
-                    <input type="range" id="dur-max" min="0" max="500" step="10" value="500">
+                    <input type="range" id="dur-min" min="0" max="500" step="10" value="0" tabindex="-1">
+                    <input type="range" id="dur-max" min="0" max="500" step="10" value="500" tabindex="-1">
                 </div>
             </div>
 
@@ -88,6 +91,12 @@
 
         <main class="content">
             
+            <nav class="top-nav-bar">
+                <a href="/dashboard" class="stats-link" title="Ver Dashboard">
+                    <span class="icon">📊</span> Tendencias del Grafo
+                </a>
+            </nav>
+
             <div class="header-area">
                 <h1 class="main-title">Buscador de Grados de Bacon</h1>
                 
@@ -95,7 +104,7 @@
                     "Cualquier persona implicada en la industria cinematográfica de Hollywood puede relacionarse con <br>
                     Kevin Bacon mediante sus papeles en el cine en tan solo seis pasos".<br>
                     Este algoritmo encuentra el camino más corto entre <strong>cualquier par de actores</strong>... <br>
-                    ¿El reto? Encontrar una conexión que llegue a los 6 grados... o intente superarlos.
+                    ¿El reto? Encontrar una conexión que llegue a los 6 grados... o intente superarlos. <br>
                     <a href="{{ url_for('static', filename='docs/monografia.pdf') }}" target="_blank" class="monograph-link">
                         📄 Leer la Investigación Completa (PDF)
                     </a>
