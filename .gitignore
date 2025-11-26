@@ -6,8 +6,13 @@
 *.csv
 *.pkl
 
+
 # --- Basura de Python ---
 __pycache__/
 *.pyc
 venv/
 .DS_Store
+
+visualizaciones/
+raw/
+*.docx

@@ -8,13 +8,13 @@ import csv
 from collections import Counter
 
 # --- CONFIGURACIÓN ---
-NUM_SIMULACIONES_EXTRA = 50000 # Cuántas MÁS quieres hacer
-ARCHIVO_SALIDA = "resultados_completo.csv"
+NUM_SIMULACIONES_EXTRA = 50000 
+ARCHIVO_SALIDA = "resultados_completo.csv" # Puedes cambiarlo a "resultados_v2.csv" para empezar limpio
 PATH_GRAFO = "grafo_bacon.pkl"
 PATH_META = "metadata_bacon.pkl"
 MIN_CONEXIONES = 15 
 
-print(f"🧪 INICIANDO EXPERIMENTO OPTIMIZADO (Bidireccional + Resume)")
+print(f"🧪 INICIANDO SIMULACIÓN FULL (PELÍCULAS + ACTORES)")
 
 # ==========================================
 # 1. CARGA DE DATOS
@@ -26,26 +26,25 @@ with open(PATH_GRAFO, 'rb') as f: GRAFO = pickle.load(f)
 with open(PATH_META, 'rb') as f: 
     METADATA = pickle.load(f)
     MAPA_PELICULAS = METADATA['peliculas']
+    MAPA_ACTORES = METADATA['actores'] # Ahora cargamos actores también
 
 todos = [k for k in GRAFO.keys() if k.startswith('nm')]
 CANDIDATOS = [n for n in todos if len(GRAFO[n]) >= MIN_CONEXIONES]
 print(f"   ✅ Grafo en RAM. Candidatos VIP: {len(CANDIDATOS):,}")
 
 # ==========================================
-# 2. ALGORITMOS OPTIMIZADOS (BIDIRECCIONALES)
+# 2. ALGORITMOS OPTIMIZADOS
 # ==========================================
 IDX_R = 4; IDX_V = 5
 
 def get_peso_casual(rating): return max(0.1, 10.1 - rating)
 def get_peso_critico(rating, votos): return (2.5 ** (10.0 - rating)) * ((math.log10(votos + 1)) ** 2)
 
-# --- BFS BIDIRECCIONAL (VELOCIDAD) ---
+# --- BFS BIDIRECCIONAL ---
 def bfs_bi_fast(inicio, fin):
     if inicio == fin: return [inicio]
     frontera_a, frontera_b = {inicio}, {fin}
     padres_a, padres_b = {inicio: None}, {fin: None}
-    
-    # Limite de seguridad (si busca demasiado, corta)
     visitados_count = 0 
     
     while frontera_a and frontera_b:
@@ -56,16 +55,15 @@ def bfs_bi_fast(inicio, fin):
         nueva = set()
         for u in frontera_a:
             visitados_count += 1
-            if visitados_count > 8000: return None # CORTAR SI ES MUY LARGO
+            if visitados_count > 8000: return None 
             
-            if u in padres_b: # Choque
-                # Reconstruir camino (simplificado)
+            if u in padres_b: 
                 camino = []
                 curr = u
                 while curr: camino.append(curr); curr = padres_a[curr]
                 curr = padres_b[u]
                 while curr: camino.append(curr); curr = padres_b[curr]
-                return camino # No importa el orden para la estadística
+                return camino
             
             for v in GRAFO.get(u, []):
                 if v not in padres_a:
@@ -74,17 +72,14 @@ def bfs_bi_fast(inicio, fin):
         frontera_a = nueva
     return None
 
-# --- DIJKSTRA BIDIRECCIONAL (CASUAL / CRITICO) ---
+# --- DIJKSTRA BIDIRECCIONAL ---
 def dijkstra_bi_fast(inicio, fin, modo):
     pq_fwd = [(0, inicio)]; pq_rev = [(0, fin)]
     cost_fwd = {inicio: 0}; cost_rev = {fin: 0}
     parent_fwd = {inicio: None}; parent_rev = {fin: None}
-    
-    mu = float('inf')
-    meet = None
+    mu = float('inf'); meet = None
     visited_fwd = set(); visited_rev = set()
     
-    # Cacheo de función de peso para velocidad
     get_meta = MAPA_PELICULAS.get
     
     def calc_peso(id_peli):
@@ -94,9 +89,8 @@ def dijkstra_bi_fast(inicio, fin, modo):
         return get_peso_critico(d[IDX_R], d[IDX_V])
 
     while pq_fwd and pq_rev:
-        if pq_fwd[0][0] + pq_rev[0][0] >= mu: break # Criterio de parada
+        if pq_fwd[0][0] + pq_rev[0][0] >= mu: break 
 
-        # Balanceo
         if len(pq_fwd) <= len(pq_rev):
             dist, u = heapq.heappop(pq_fwd)
             active_c, other_c = cost_fwd, cost_rev
@@ -112,102 +106,103 @@ def dijkstra_bi_fast(inicio, fin, modo):
         active_vis.add(u)
         
         for v in GRAFO.get(u, []):
-            # Peso
             w = 0.1 if v.startswith('nm') else calc_peso(v)
-            
             nd = dist + w
             if nd < active_c.get(v, float('inf')):
                 active_c[v] = nd
                 active_par[v] = u
                 heapq.heappush(active_pq, (nd, v))
-                
                 if v in other_c:
                     tot = nd + other_c[v]
-                    if tot < mu:
-                        mu = tot
-                        meet = v
+                    if tot < mu: mu = tot; meet = v
     
-    # Reconstruir si hubo encuentro
     if meet:
         camino = []
         curr = meet
         while curr: camino.append(curr); curr = parent_fwd[curr]
-        curr = parent_rev[meet] # Empezar desde padre para no duplicar meet
+        curr = parent_rev[meet] 
         while curr: camino.append(curr); curr = parent_rev[curr]
         return camino
     return None
 
 # ==========================================
-# 3. EJECUCIÓN (CON APPEND)
+# 3. EJECUCIÓN
 # ==========================================
 simulaciones_hechas = 0
 modo_apertura = 'w'
 
-# Chequear si retomamos
 if os.path.exists(ARCHIVO_SALIDA):
     with open(ARCHIVO_SALIDA, 'r', encoding='utf-8') as f:
-        simulaciones_hechas = sum(1 for row in f) - 1 # Restar header
+        simulaciones_hechas = sum(1 for row in f) - 1
     if simulaciones_hechas > 0:
-        print(f"   📂 Retomando archivo existente con {simulaciones_hechas} registros.")
-        modo_apertura = 'a' # Append
+        print(f"   📂 Agregando a archivo existente ({simulaciones_hechas} registros previos).")
+        modo_apertura = 'a'
     else:
         simulaciones_hechas = 0
 
-print(f"2️⃣  Ejecutando {NUM_SIMULACIONES_EXTRA} nuevas simulaciones...")
+print(f"2️⃣  Ejecutando {NUM_SIMULACIONES_EXTRA} simulaciones...")
 t_inicio = time.time()
 buffer = []
 
-# Si es nuevo, escribimos header
 if modo_apertura == 'w':
     with open(ARCHIVO_SALIDA, 'w', newline='', encoding='utf-8') as f:
-        csv.writer(f).writerow(['sim_id', 'modo', 'pelicula_id', 'titulo', 'anio', 'rating', 'generos'])
+        # Usamos las mismas columnas para compatibilidad, pero 'generos' puede ser 'ACTOR'
+        csv.writer(f).writerow(['sim_id', 'modo', 'id', 'titulo_nombre', 'anio', 'rating', 'generos_tipo'])
 
 for i in range(1, NUM_SIMULACIONES_EXTRA + 1):
-    # Feedback
     if i % 10 == 0:
         dt = time.time() - t_inicio
         vel = i / dt
         eta = (NUM_SIMULACIONES_EXTRA - i) / vel / 60
-        print(f"\r   🚀 +{i} sims | Total: {simulaciones_hechas + i} | ETA: {eta:.1f} min | {vel:.1f} s/s   ", end="", flush=True)
+        print(f"\r   🚀 +{i} sims | Total Rows: {simulaciones_hechas} | ETA: {eta:.1f} min | {vel:.1f} s/s   ", end="", flush=True)
 
     try:
         origen, destino = random.sample(CANDIDATOS, 2)
+        res = []
         
-        # 1. BFS Bidireccional (Gatekeeper)
-        c_vel = bfs_bi_fast(origen, destino)
-        if not c_vel: continue # Sin conexión o muy lejos
+        # 1. Velocidad
+        c = bfs_bi_fast(origen, destino)
+        if c: res.append(('Velocidad', c))
         
-        # Guardar Velocidad
-        res = [('Velocidad', c_vel)]
-        
-        # 2. Casual (Bi-Dijkstra)
-        c_cas = dijkstra_bi_fast(origen, destino, 'casual')
-        if c_cas: res.append(('Casual', c_cas))
-        
-        # 3. Crítico (Bi-Dijkstra)
-        c_crit = dijkstra_bi_fast(origen, destino, 'critico')
-        if c_crit: res.append(('Crítico', c_crit))
+        # Si hay conexión, seguimos
+        if c:
+            c2 = dijkstra_bi_fast(origen, destino, 'casual')
+            if c2: res.append(('Casual', c2))
+            c3 = dijkstra_bi_fast(origen, destino, 'critico')
+            if c3: res.append(('Crítico', c3))
 
-        # Procesar para CSV
+        # PROCESAR RESULTADOS (PELIS + ACTORES)
         for modo, camino in res:
-            pelis = [n for n in camino if n.startswith('tt')]
-            for pid in pelis:
-                d = MAPA_PELICULAS.get(pid)
-                if d:
-                    # sim_id es correlativo global
-                    buffer.append([simulaciones_hechas + i, modo, pid, d[0], d[1], d[4], ",".join(d[2])])
+            # Ignoramos origen y destino (extremos), solo lo del medio cuenta como "Puente"
+            puentes = camino[1:-1]
+            
+            for nid in puentes:
+                # CASO PELÍCULA
+                if nid.startswith('tt'):
+                    d = MAPA_PELICULAS.get(nid)
+                    if d:
+                        # sim_id, modo, id, titulo, anio, rating, generos
+                        buffer.append([simulaciones_hechas + i, modo, nid, d[0], d[1], d[4], ",".join(d[2])])
+                
+                # CASO ACTOR
+                elif nid.startswith('nm'):
+                    d = MAPA_ACTORES.get(nid)
+                    if d:
+                        # Para mantener la estructura del CSV:
+                        # rating -> Dejamos vacío o 0
+                        # generos -> Ponemos "ACTOR" para filtrar después
+                        buffer.append([simulaciones_hechas + i, modo, nid, d[0], d[1], "", "ACTOR"])
 
     except Exception: continue
 
-    # Volcar a disco cada 100 sims
     if len(buffer) >= 500:
         with open(ARCHIVO_SALIDA, 'a', newline='', encoding='utf-8') as f:
             csv.writer(f).writerows(buffer)
+            simulaciones_hechas += len(buffer)
         buffer = []
 
-# Final flush
 if buffer:
     with open(ARCHIVO_SALIDA, 'a', newline='', encoding='utf-8') as f:
         csv.writer(f).writerows(buffer)
 
-print(f"\n\n✅ ¡Listo! Total acumulado: {simulaciones_hechas + i} simulaciones en {ARCHIVO_SALIDA}")
+print(f"\n\n✅ ¡Terminado! Datos guardados en '{ARCHIVO_SALIDA}'.")
