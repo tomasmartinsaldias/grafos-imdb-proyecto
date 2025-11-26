@@ -434,6 +434,62 @@ a.card-link { text-decoration: none; color: inherit; display: block; flex-shrink
 }
 
 /* =========================================
+   9. TOOLTIPS (ESTILO PREMIUM WHITE & GOLD)
+   ========================================= */
+
+#global-tooltip {
+    position: fixed;
+    display: none;
+    
+    /* ESTILO VISUAL: Blanco y Dorado */
+    background-color: #FFFFFF;       /* Fondo Blanco */
+    border: 1px solid var(--gold-medium); /* Borde Dorado */
+    color: var(--text-primary);      /* Texto oscuro para contraste */
+    
+    padding: 10px 15px;
+    border-radius: 4px;
+    font-family: 'Cormorant Garamond', serif; /* Tu tipografía elegante */
+    font-weight: 600;
+    font-size: 0.9rem;
+    line-height: 1.4;
+    
+    /* COMPORTAMIENTO */
+    z-index: 9999;
+    pointer-events: none;
+    white-space: pre-line;
+    max-width: 260px;
+    
+    /* Sombra elegante para que flote sobre el contenido */
+    box-shadow: 0 4px 15px rgba(0,0,0,0.15);
+}
+
+#global-tooltip.visible {
+    display: block;
+    /* Pequeña animación para que no aparezca de golpe */
+    animation: fadeInTooltip 0.2s ease-out;
+}
+
+@keyframes fadeInTooltip {
+    from { opacity: 0; transform: translateY(5px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+/* Ícono de ayuda (?) */
+.help-icon {
+    cursor: help;
+    color: #999; /* Gris sutil por defecto */
+    margin-left: 6px;
+    font-size: 0.85em;
+    transition: all 0.2s ease;
+    border-bottom: 1px dotted #ccc; /* Pista visual sutil */
+}
+
+.help-icon:hover {
+    color: var(--red-oscar); /* Resaltar en rojo o dorado al pasar el mouse */
+    border-bottom-color: var(--red-oscar);
+}
+
+/* =========================================
    8. MEDIA QUERIES
    ========================================= */
 

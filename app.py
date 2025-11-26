@@ -7,10 +7,10 @@ import json
 from functools import lru_cache
 from flask import Flask, render_template, request, jsonify
 from dotenv import load_dotenv
+import heapq
 
 # Importamos tus algoritmos
-from algoritmos import bfs_bidireccional, dijkstra, dijkstra_bidireccional
-
+from algoritmos import bfs_bidireccional, dijkstra_bidireccional_sql
 load_dotenv()
 app = Flask(__name__)
 
@@ -18,6 +18,7 @@ TMDB_KEY = os.getenv("TMDB_API_KEY")
 DB_NAME = "bacon.db"
 STATS_DB = "stats.db"
 GLOBAL_STATS_FILE = "global_stats.json"
+
 
 # ==========================================
 # 1. GESTIÓN DE ESTADÍSTICAS (SQLITE)
@@ -157,7 +158,11 @@ def buscar():
         data = request.json
         origen, destino = data.get('actor1'), data.get('actor2')
         filtros = data.get('filtros', {})
+        # OBTENEMOS EL MODO DE FILTRO, POR DEFECTO 'Velocidad'
         modo = filtros.get('tipo', 'Velocidad')
+        
+        # AÑADIDO: DEBUGGING - Imprimimos el modo que llega para confirmar
+        print(f"Búsqueda solicitada. Modo: {modo}")
         
         # Filtros
         anio_min, anio_max = filtros.get('anio', [1900, 2025])
@@ -182,10 +187,29 @@ def buscar():
             ids_validos = set(row[0] for row in cursor.fetchall())
 
         # Algoritmo
-        if modo == 'Velocidad': camino_ids = bfs_bidireccional(cursor, origen, destino, ids_validos)
-        elif modo == 'Casual': camino_ids = dijkstra_bidireccional(cursor, origen, destino, calcular_peso_casual, ids_validos)
-        elif modo in ['Critico', 'Crítico']: camino_ids = dijkstra_bidireccional(cursor, origen, destino, calcular_peso_critico, ids_validos)
-        else: camino_ids = None
+        
+        # NORMALIZACIÓN: Usamos .lower() y strip() para hacer las comparaciones más robustas
+        # 1. Normalizamos el texto: minúsculas, quitamos espacios y reemplazamos la í con tilde
+        modo_normalizado = modo.lower().strip().replace('í', 'i')
+        
+        print(f"DEBUG: Modo recibido: '{modo}' -> Normalizado: '{modo_normalizado}'") # Esto nos dirá qué pasa en la consola
+        
+        # 2. Selección del Algoritmo
+        if modo_normalizado == 'velocidad':
+            camino_ids = bfs_bidireccional(cursor, origen, destino, ids_validos)
+        
+        elif modo_normalizado == 'casual':
+            # USAMOS LA NUEVA FUNCIÓN SQL
+            print("Usando Dijkstra SQL (Casual)...")
+            camino_ids = dijkstra_bidireccional_sql(cursor, origen, destino, calcular_peso_casual, ids_validos)
+            
+        elif modo_normalizado == 'critico':
+            # USAMOS LA NUEVA FUNCIÓN SQL
+            print("Usando Dijkstra SQL (Crítico)...")
+            camino_ids = dijkstra_bidireccional_sql(cursor, origen, destino, calcular_peso_critico, ids_validos)
+            
+        else:
+            camino_ids = None
 
         if not camino_ids:
             conn.close()
