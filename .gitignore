@@ -13,3 +13,6 @@
 # --- Python basura ---
 __pycache__/
 venv/
+
+visualizaciones/
+raw/
