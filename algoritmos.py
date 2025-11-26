@@ -115,3 +115,96 @@ def dijkstra(cursor, inicio_id, fin_id, funcion_peso, ids_validos=None):
                 heapq.heappush(pq, (nuevo_costo, vecino))
                 
     return None
+
+def reconstruir_camino_bi_dijkstra(padres_fwd, padres_rev, encuentro):
+    """Reconstruye el camino uniendo las dos mitades desde el punto de encuentro."""
+    camino_fwd = []
+    curr = encuentro
+    while curr:
+        camino_fwd.append(curr)
+        curr = padres_fwd[curr]
+    camino_fwd.reverse()
+    
+    camino_rev = []
+    # Empezamos desde el padre para no duplicar el nodo central
+    curr = padres_rev[encuentro] 
+    while curr:
+        camino_rev.append(curr)
+        curr = padres_rev[curr]
+        
+    return camino_fwd + camino_rev
+
+def dijkstra_bidireccional(grafo, inicio, fin, metadatos, funcion_peso, ids_validos=None):
+    """
+    Dijkstra Bidireccional Correcto (Terminación simétrica).
+    Garantiza el camino óptimo en grafos ponderados no dirigidos.
+    """
+    if inicio == fin: return [inicio]
+    if inicio not in grafo or fin not in grafo: return None
+
+    # Forward
+    pq_fwd = [(0.0, inicio)]
+    dist_fwd = {inicio: 0.0}
+    visited_fwd = set()
+    parent_fwd = {inicio: None}
+    
+    # Backward
+    pq_rev = [(0.0, fin)]
+    dist_rev = {fin: 0.0}
+    visited_rev = set()
+    parent_rev = {fin: None}
+    
+    mu = float('inf') # Mejor costo total hallado
+    meet_node = None  # Punto de encuentro del mejor camino
+
+    while pq_fwd and pq_rev:
+        # CRITERIO DE PARADA MATEMÁTICO
+        # Si el menor costo posible para conectar (top_fwd + top_rev) ya es peor que mu, paramos.
+        if pq_fwd[0][0] + pq_rev[0][0] >= mu:
+            return reconstruir_camino_bi_dijkstra(parent_fwd, parent_rev, meet_node)
+
+        # Balanceo: Expandir el lado con menor costo mínimo
+        if len(pq_fwd) <= len(pq_rev): # O pq_fwd[0][0] < pq_rev[0][0]
+            dist_u, u = heapq.heappop(pq_fwd)
+            active_dist, other_dist = dist_fwd, dist_rev
+            active_visited = visited_fwd
+            active_parent = parent_fwd
+            active_pq = pq_fwd
+            direction = 'fwd'
+        else:
+            dist_u, u = heapq.heappop(pq_rev)
+            active_dist, other_dist = dist_rev, dist_fwd
+            active_visited = visited_rev
+            active_parent = parent_rev
+            active_pq = pq_rev
+            direction = 'rev'
+
+        if u in active_visited: continue
+        active_visited.add(u)
+
+        # Check de cruce (Mejora de mu)
+        if u in other_dist:
+            total = dist_u + other_dist[u]
+            if total < mu:
+                mu = total
+                meet_node = u
+
+        # Expansión de vecinos
+        for v in grafo.get(u, []):
+            # Filtro Patovica
+            if ids_validos and v.startswith('tt') and v not in ids_validos: continue
+
+            # Peso (Simétrico en grafos no dirigidos)
+            weight = funcion_peso(u, v, metadatos)
+            new_dist = dist_u + weight
+            
+            if new_dist < active_dist.get(v, float('inf')):
+                active_dist[v] = new_dist
+                active_parent[v] = u
+                heapq.heappush(active_pq, (new_dist, v))
+
+    # Si salimos del while y tenemos un candidato
+    if meet_node:
+        return reconstruir_camino_bi_dijkstra(parent_fwd, parent_rev, meet_node)
+        
+    return None

@@ -9,7 +9,7 @@ from flask import Flask, render_template, request, jsonify
 from dotenv import load_dotenv
 
 # Importamos tus algoritmos
-from algoritmos import bfs_bidireccional, dijkstra 
+from algoritmos import bfs_bidireccional, dijkstra, dijkstra_bidireccional
 
 load_dotenv()
 app = Flask(__name__)
@@ -183,8 +183,8 @@ def buscar():
 
         # Algoritmo
         if modo == 'Velocidad': camino_ids = bfs_bidireccional(cursor, origen, destino, ids_validos)
-        elif modo == 'Casual': camino_ids = dijkstra(cursor, origen, destino, calcular_peso_casual, ids_validos)
-        elif modo in ['Critico', 'Crítico']: camino_ids = dijkstra(cursor, origen, destino, calcular_peso_critico, ids_validos)
+        elif modo == 'Casual': camino_ids = dijkstra_bidireccional(cursor, origen, destino, calcular_peso_casual, ids_validos)
+        elif modo in ['Critico', 'Crítico']: camino_ids = dijkstra_bidireccional(cursor, origen, destino, calcular_peso_critico, ids_validos)
         else: camino_ids = None
 
         if not camino_ids:
