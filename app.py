@@ -8,6 +8,8 @@ from functools import lru_cache
 from flask import Flask, render_template, request, jsonify
 from dotenv import load_dotenv
 import heapq
+import psycopg2
+from psycopg2.extras import RealDictCursor
 
 # Importamos tus algoritmos
 from algoritmos import bfs_bidireccional, dijkstra_bidireccional_sql
@@ -24,9 +26,13 @@ GLOBAL_STATS_FILE = "global_stats.json"
 # 1. GESTIÓN DE ESTADÍSTICAS (SQLITE)
 # ==========================================
 def init_stats_db():
+    conn = get_stats_connection()
+    if not conn: return # Si falla la conexión, no hacemos nada
+    
     try:
-        with sqlite3.connect(STATS_DB) as conn:
-            conn.execute('''
+        with conn.cursor() as cur:
+            # Postgres usa sintaxis muy similar para CREATE TABLE
+            cur.execute('''
                 CREATE TABLE IF NOT EXISTS hits (
                     id TEXT,
                     tipo TEXT,
@@ -35,21 +41,37 @@ def init_stats_db():
                     PRIMARY KEY (id, modo)
                 )
             ''')
+            conn.commit()
+            print("✅ Tabla 'hits' verificada en PostgreSQL.")
     except Exception as e:
-        print(f"⚠️ Error iniciando stats.db: {e}")
+        print(f"⚠️ Error iniciando tabla en Postgres: {e}")
+    finally:
+        conn.close()
 
 init_stats_db()
 
 def guardar_hit_stats(id_entidad, tipo, modo):
+    # 1. Usamos la conexión a la Nube (no al archivo local)
+    conn = get_stats_connection()
+    if not conn: return
+
     try:
-        with sqlite3.connect(STATS_DB) as conn:
-            conn.execute("""
-                INSERT INTO hits (id, tipo, modo, count) VALUES (?, ?, ?, 1)
-                ON CONFLICT(id, modo) DO UPDATE SET count = count + 1
+        # 2. Creamos un cursor (el "lápiz" para escribir)
+        with conn.cursor() as cur:
+            cur.execute("""
+                INSERT INTO hits (id, tipo, modo, count) 
+                VALUES (%s, %s, %s, 1)
+                ON CONFLICT(id, modo) 
+                DO UPDATE SET count = hits.count + 1
             """, (id_entidad, tipo, modo))
-            conn.commit()
+            
+            # Nota: En Postgres especificamos 'hits.count' para evitar ambigüedades
+        
+        conn.commit() # ¡Obligatorio confirmar!
     except Exception as e:
-        print(f"Error guardando stat: {e}")
+        print(f"Error guardando stat en Postgres: {e}")
+    finally:
+        conn.close() # Importante liberar la conexión al terminar
 
 # ==========================================
 # 2. CACHÉ & UTILS
@@ -74,6 +96,14 @@ def get_db_connection():
     conn = sqlite3.connect(DB_NAME)
     conn.row_factory = sqlite3.Row
     return conn
+
+def get_stats_connection():
+    try:
+        conn = psycopg2.connect(os.getenv("DATABASE_URL"))
+        return conn
+    except Exception as e:
+        print(f"⚠️ Error conectando a Postgres: {e}")
+        return None
 
 @lru_cache(maxsize=2000)
 def obtener_imagen_tmdb(imdb_id, tipo):
@@ -261,8 +291,11 @@ def buscar():
 @app.route('/api/stats_comparativa')
 def stats_comparativa():
     resultado = {}
+    conn_stats = None
+    conn_bacon = None
+
     try:
-        # 1. GLOBAL (Desde JSON pre-calculado)
+        # 1. GLOBAL (Sin cambios)
         if os.path.exists(GLOBAL_STATS_FILE):
             with open(GLOBAL_STATS_FILE, 'r') as f:
                 raw_global = json.load(f)
@@ -271,30 +304,66 @@ def stats_comparativa():
                         item['img'] = obtener_imagen_tmdb(item['id'], 'movie' if cat == 'peliculas' else 'person')
                 resultado['Global'] = raw_global
         
-        # 2. MODOS (Desde SQL stats.db)
-        conn_stats = sqlite3.connect(STATS_DB)
-        conn_bacon = get_db_connection()
+        # 2. MODOS (PostgreSQL + SQLite)
+        conn_stats = get_stats_connection() # Postgres
+        conn_bacon = get_db_connection()    # SQLite (bacon.db)
         
+        # Verificación de seguridad: Si Postgres falla, devolvemos lo que tengamos
+        if not conn_stats: 
+            if conn_bacon: conn_bacon.close()
+            return jsonify(resultado)
+
         for modo in ['Velocidad', 'Casual', 'Crítico']:
-            cursor = conn_stats.execute("SELECT id, count, tipo FROM hits WHERE modo=? ORDER BY count DESC LIMIT 20", (modo,))
-            top_p, top_a = [], []
-            
-            for nid, count, tipo in cursor.fetchall():
-                if tipo == 'movie':
-                    r = conn_bacon.execute("SELECT titulo, anio FROM peliculas WHERE id=?", (nid,)).fetchone()
-                    if r: top_p.append({'titulo': r['titulo'], 'count': f"{count} usos", 'img': obtener_imagen_tmdb(nid, 'movie')})
-                else:
-                    r = conn_bacon.execute("SELECT nombre FROM actores WHERE id=?", (nid,)).fetchone()
-                    if r: top_a.append({'titulo': r['nombre'], 'count': f"{count} usos", 'img': obtener_imagen_tmdb(nid, 'person')})
+            # A. Creamos el cursor (con fábrica de diccionarios)
+            with conn_stats.cursor(cursor_factory=RealDictCursor) as cur:
+                
+                # B. Ejecutamos la consulta (separado) y con %s
+                cur.execute("""
+                    SELECT id, count, tipo 
+                    FROM hits 
+                    WHERE modo=%s 
+                    ORDER BY count DESC LIMIT 20
+                """, (modo,))
+                
+                top_p, top_a = [], []
+                
+                # C. Iteramos sobre diccionarios (no tuplas)
+                for row in cur.fetchall():
+                    # Extraemos los datos del diccionario de Postgres
+                    nid = row['id']
+                    count = row['count']
+                    tipo = row['tipo']
+                    
+                    # D. Consultamos SQLite para los detalles (títulos, nombres)
+                    if tipo == 'movie':
+                        r = conn_bacon.execute("SELECT titulo, anio FROM peliculas WHERE id=?", (nid,)).fetchone()
+                        if r: 
+                            top_p.append({
+                                'titulo': r['titulo'], 
+                                'count': f"{count} usos", 
+                                'img': obtener_imagen_tmdb(nid, 'movie')
+                            })
+                    else:
+                        r = conn_bacon.execute("SELECT nombre FROM actores WHERE id=?", (nid,)).fetchone()
+                        if r: 
+                            top_a.append({
+                                'titulo': r['nombre'], 
+                                'count': f"{count} usos", 
+                                'img': obtener_imagen_tmdb(nid, 'person')
+                            })
             
             resultado[modo] = {'peliculas': top_p, 'actores': top_a}
             
-        conn_stats.close()
-        conn_bacon.close()
         return jsonify(resultado)
+
     except Exception as e:
         print(f"Stats error: {e}")
-        return jsonify({})
+        return jsonify({}) # Retornar vacío en caso de error grave
+    
+    finally:
+        # Cerramos conexiones si existen
+        if conn_stats: conn_stats.close()
+        if conn_bacon: conn_bacon.close()
 
 if __name__ == '__main__':
     app.run(debug=True, port=5000)
