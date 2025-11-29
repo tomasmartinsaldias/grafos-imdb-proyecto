@@ -267,7 +267,7 @@ def buscar():
         res = []
         for nid in camino_ids:
             if nid.startswith('nm'):
-                res.append({'id': nid, 'type': 'person', 'title': actores.get(nid, '?'), 'img': obtener_imagen_tmdb(nid, 'person')})
+                res.append({'id': nid, 'type': 'person', 'title': actores.get(nid, '?'), 'subtitle': 'Actor', 'img': obtener_imagen_tmdb(nid, 'person')})
             else:
                 p = pelis.get(nid)
                 t = p['titulo'] if p else '?'
