@@ -21,17 +21,31 @@ DB_NAME = "bacon.db"
 STATS_DB = "stats.db"
 GLOBAL_STATS_FILE = "global_stats.json"
 
+# ==========================================
+# 1. GESTIÓN DE BASE DE DATOS Y ESTADÍSTICAS
+# ==========================================
 
-# ==========================================
-# 1. GESTIÓN DE ESTADÍSTICAS (SQLITE)
-# ==========================================
+# 1. Primero definimos las conexiones (Los cimientos)
+def get_db_connection():
+    conn = sqlite3.connect(DB_NAME)
+    conn.row_factory = sqlite3.Row
+    return conn
+
+def get_stats_connection():
+    try:
+        conn = psycopg2.connect(os.getenv("DATABASE_URL"))
+        return conn
+    except Exception as e:
+        print(f"⚠️ Error conectando a Postgres: {e}")
+        return None
+
+# 2. Luego definimos las funciones que usan esas conexiones
 def init_stats_db():
     conn = get_stats_connection()
-    if not conn: return # Si falla la conexión, no hacemos nada
+    if not conn: return 
     
     try:
         with conn.cursor() as cur:
-            # Postgres usa sintaxis muy similar para CREATE TABLE
             cur.execute('''
                 CREATE TABLE IF NOT EXISTS hits (
                     id TEXT,
@@ -48,6 +62,7 @@ def init_stats_db():
     finally:
         conn.close()
 
+# 3. Finalmente EJECUTAMOS la inicialización (Ahora Python ya sabe qué es get_stats_connection)
 init_stats_db()
 
 def guardar_hit_stats(id_entidad, tipo, modo):
@@ -91,19 +106,6 @@ def cargar_cache_inicial():
     except: pass
 
 cargar_cache_inicial()
-
-def get_db_connection():
-    conn = sqlite3.connect(DB_NAME)
-    conn.row_factory = sqlite3.Row
-    return conn
-
-def get_stats_connection():
-    try:
-        conn = psycopg2.connect(os.getenv("DATABASE_URL"))
-        return conn
-    except Exception as e:
-        print(f"⚠️ Error conectando a Postgres: {e}")
-        return None
 
 @lru_cache(maxsize=2000)
 def obtener_imagen_tmdb(imdb_id, tipo):
