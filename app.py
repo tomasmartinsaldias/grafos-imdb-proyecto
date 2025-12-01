@@ -17,8 +17,8 @@ load_dotenv()
 app = Flask(__name__)
 
 TMDB_KEY = os.getenv("TMDB_API_KEY")
-DB_NAME = "bacon.db"
-STATS_DB = "stats.db"
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+DB_NAME = os.path.join(BASE_DIR, "data", "bacon.db")
 GLOBAL_STATS_FILE = "global_stats.json"
 
 # ==========================================
