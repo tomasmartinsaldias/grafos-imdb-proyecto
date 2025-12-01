@@ -19,8 +19,8 @@
             const res = await fetch('/api/stats_comparativa');
             GLOBAL_STATS = await res.json();
             
-            // Cargar por defecto 'Global'
-            switchStats('Global');
+            // Cargar por defecto 'Velocidad'
+            switchStats('Velocidad');
         } catch (e) {
             console.error("Error cargando dashboard:", e);
         }
@@ -150,8 +150,7 @@
         </p>
         
         <div class="mode-tabs">
-            <button class="tab-btn active" onclick="switchStats('Global')">Global (Teórico)</button>
-            <button class="tab-btn" onclick="switchStats('Velocidad')">Velocidad</button>
+            <button class="tab-btn active" onclick="switchStats('Velocidad')">Velocidad</button>
             <button class="tab-btn" onclick="switchStats('Casual')">Casual</button>
             <button class="tab-btn" onclick="switchStats('Crítico')">Crítico</button>
         </div>

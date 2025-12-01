@@ -19,7 +19,6 @@ app = Flask(__name__)
 TMDB_KEY = os.getenv("TMDB_API_KEY")
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DB_NAME = os.path.join(BASE_DIR, "data", "bacon.db")
-GLOBAL_STATS_FILE = "global_stats.json"
 
 # ==========================================
 # 1. GESTIÓN DE BASE DE DATOS Y ESTADÍSTICAS
@@ -296,16 +295,7 @@ def stats_comparativa():
     conn_stats = None
     conn_bacon = None
 
-    try:
-        # 1. GLOBAL (Sin cambios)
-        if os.path.exists(GLOBAL_STATS_FILE):
-            with open(GLOBAL_STATS_FILE, 'r') as f:
-                raw_global = json.load(f)
-                for cat in ['peliculas', 'actores']:
-                    for item in raw_global.get(cat, []):
-                        item['img'] = obtener_imagen_tmdb(item['id'], 'movie' if cat == 'peliculas' else 'person')
-                resultado['Global'] = raw_global
-        
+    try:      
         # 2. MODOS (PostgreSQL + SQLite)
         conn_stats = get_stats_connection() # Postgres
         conn_bacon = get_db_connection()    # SQLite (bacon.db)
