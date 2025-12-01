@@ -5,7 +5,6 @@ import math
 import time
 import os
 import csv
-from collections import Counter
 
 # --- CONFIGURACIÓN ---
 NUM_SIMULACIONES_EXTRA = 50000 
