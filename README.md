@@ -1,4 +1,4 @@
-# 🎬 Graph Theory Applied to Cinema
+# 🎬 Teoría de Grafos Aplicada a la Industria Cinematográfica
 
 > **¿Existe un hilo invisible que conecta toda la industria cinematográfica?**
 
